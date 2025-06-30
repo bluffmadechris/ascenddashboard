@@ -92,6 +92,16 @@ class ApiClient {
           url: url
         });
         
+        // Handle rate limiting
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After') || '300';
+          const minutes = Math.ceil(parseInt(retryAfter) / 60);
+          return {
+            success: false,
+            message: `Too many attempts. Please wait ${minutes} minute${minutes > 1 ? 's' : ''} before trying again.`
+          };
+        }
+        
         // Handle specific HTTP errors
         if (response.status === 404) {
           return {
@@ -120,6 +130,13 @@ class ApiClient {
       }
       
       const data = await response.json();
+      
+      // Log remaining rate limit for debugging
+      const remaining = response.headers.get('RateLimit-Remaining');
+      if (remaining && parseInt(remaining) < 5) {
+        console.warn(`Rate limit running low. ${remaining} requests remaining.`);
+      }
+      
       return data;
       
     } catch (error) {
