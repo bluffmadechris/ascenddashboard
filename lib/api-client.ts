@@ -82,7 +82,7 @@ class ApiClient {
     };
     
     try {
-      console.log(`Making ${options.method || 'GET'} request to:`, url);
+      console.log(`zzzMaking ${options.method || 'GET'} request to:`, url);
       const response = await fetch(url, config);
       
       if (!response.ok) {
