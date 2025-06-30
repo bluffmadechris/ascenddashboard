@@ -1,7 +1,7 @@
 // API Client for Ascend Media Dashboard
 // Handles all communication with the backend API server
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://web-production-a530d.up.railway.app/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
 // Types for API responses
 export interface ApiResponse<T = any> {
@@ -61,6 +61,7 @@ class ApiClient {
   
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
+    console.log('API Client initialized with base URL:', this.baseUrl);
   }
   
   // Generic request method
@@ -81,24 +82,51 @@ class ApiClient {
     };
     
     try {
+      console.log(`Making ${options.method || 'GET'} request to:`, url);
       const response = await fetch(url, config);
-      const data = await response.json();
       
-      // Handle token expiration
-      if (response.status === 401 && data.message?.includes('expired')) {
-        TokenManager.removeToken();
-        // Redirect to login if we're in the browser
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
+      if (!response.ok) {
+        console.error('API request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: url
+        });
+        
+        // Handle specific HTTP errors
+        if (response.status === 404) {
+          return {
+            success: false,
+            message: 'API endpoint not found. Please check your API configuration.',
+          };
+        }
+        
+        if (response.status === 401) {
+          TokenManager.removeToken();
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+          return {
+            success: false,
+            message: 'Authentication failed. Please log in again.',
+          };
+        }
+        
+        if (response.status === 403) {
+          return {
+            success: false,
+            message: 'Access denied. You do not have permission to perform this action.',
+          };
         }
       }
       
+      const data = await response.json();
       return data;
+      
     } catch (error) {
       console.error('API request failed:', error);
       return {
         success: false,
-        message: 'Network error. Please check your connection.',
+        message: 'Network error. Please check your connection and API configuration.',
       };
     }
   }
