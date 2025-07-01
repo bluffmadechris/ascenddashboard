@@ -6,72 +6,46 @@ import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { format } from "date-fns"
 import Link from "next/link"
-import { loadData } from "@/lib/data-persistence"
+import { apiClient } from "@/lib/api-client"
 
 type SimpleInvoice = {
   id: string
-  name: string
-  clientId: string
-  clientName: string
-  date: Date
-  total: number
+  description: string
+  client_id: string
+  client_name: string
+  issue_date: string
+  amount: number
   status: string
-  createdBy: string
-  createdByName: string
+  created_by: string
+  created_by_name: string
 }
 
 export function RecentInvoices() {
+  const { user, isOwner } = useAuth()
   const [invoices, setInvoices] = useState<SimpleInvoice[]>([])
   const [loading, setLoading] = useState(true)
-  const { user } = useAuth()
-
-  // Check if the user is an owner (any owner, not just specific email)
-  const isOwner = user?.role === "owner"
 
   useEffect(() => {
-    const loadInvoices = () => {
+    const fetchInvoices = async () => {
       try {
-        const allInvoices = loadData<SimpleInvoice[]>("invoices", [])
-
-        if (!Array.isArray(allInvoices)) {
-          console.error("Expected allInvoices to be an array, got:", typeof allInvoices)
-          setInvoices([])
-          return
+        setLoading(true)
+        const response = await apiClient.getInvoices()
+        if (response.success) {
+          // Get the 5 most recent invoices
+          const recentInvoices = response.data.invoices
+            .filter((invoice: SimpleInvoice) => isOwner || invoice.created_by === user?.id)
+            .slice(0, 5)
+          setInvoices(recentInvoices)
         }
-
-        let filteredInvoices = [...allInvoices]
-
-        // For non-owners, only show their own invoices
-        if (!isOwner) {
-          filteredInvoices = filteredInvoices.filter((invoice) => invoice.createdBy === user?.id)
-        }
-
-        // Sort by date (newest first)
-        filteredInvoices.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-
-        // Take only the 5 most recent
-        setInvoices(filteredInvoices.slice(0, 5))
       } catch (error) {
-        console.error("Error loading invoices:", error)
-        setInvoices([])
+        console.error("Error fetching invoices:", error)
       } finally {
         setLoading(false)
       }
     }
 
-    loadInvoices()
-
-    // Listen for storage events to refresh the list
-    const handleStorageChange = () => {
-      loadInvoices()
-    }
-
-    window.addEventListener("storage", handleStorageChange)
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange)
-    }
-  }, [user, isOwner])
+    fetchInvoices()
+  }, [user?.id, isOwner])
 
   return (
     <Card>
@@ -96,20 +70,20 @@ export function RecentInvoices() {
             {invoices.map((invoice) => (
               <div key={invoice.id} className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium">{invoice.name}</p>
+                  <p className="text-sm font-medium">{invoice.description}</p>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">{format(new Date(invoice.date), "MMM d, yyyy")}</p>
-                    {isOwner && invoice.createdBy !== user?.id && (
+                    <p className="text-sm text-muted-foreground">{format(new Date(invoice.issue_date), "MMM d, yyyy")}</p>
+                    {isOwner && invoice.created_by !== user?.id && (
                       <Badge variant="outline" className="text-xs">
-                        {invoice.createdByName}
+                        {invoice.created_by_name}
                       </Badge>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-sm font-medium">${invoice.total.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground">{invoice.clientName}</p>
+                    <p className="text-sm font-medium">${invoice.amount.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">{invoice.client_name || "No Client"}</p>
                   </div>
                   <Badge variant={invoice.status === "paid" ? "default" : "secondary"} className="capitalize">
                     {invoice.status}

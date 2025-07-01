@@ -154,3 +154,30 @@ export function hasStoredData(): boolean {
     return false
   }
 }
+
+// Function to clean up old data that has been migrated to the API
+export function cleanupOldData(): void {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    // List of keys that have been migrated to the API
+    const migratedKeys = [
+      "invoices",
+      "simple-invoices",
+      "invoice-items",
+      "invoice-drafts"
+    ]
+
+    migratedKeys.forEach(key => {
+      const fullKey = `ascend-media-${key}`
+      if (localStorage.getItem(fullKey)) {
+        localStorage.removeItem(fullKey)
+        console.log(`Cleaned up old data: ${fullKey}`)
+      }
+    })
+  } catch (error) {
+    console.error("Error cleaning up old data:", error)
+  }
+}
