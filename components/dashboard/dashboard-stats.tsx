@@ -124,7 +124,7 @@ export function DashboardStats() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalRevenue || 0)}</div>
-            <p className="text-xs text-muted-foreground">+{revenueChange}% from last month</p>
+            <p className="text-xs text-muted-foreground">Current month revenue</p>
           </CardContent>
         </Card>
         <Card>
@@ -134,7 +134,7 @@ export function DashboardStats() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(totalInvoicesAmount || 0)}</div>
-            <p className="text-xs text-muted-foreground">+{invoicesChange}% from last month</p>
+            <p className="text-xs text-muted-foreground">Current month invoices</p>
           </CardContent>
         </Card>
         <Card>
