@@ -248,23 +248,6 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="industry">Industry</Label>
-              <Select value={formData.industry} onValueChange={(value) => handleSelectChange("industry", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an industry" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Entertainment">Entertainment</SelectItem>
-                  <SelectItem value="Content Creation">Content Creation</SelectItem>
-                  <SelectItem value="Digital Media">Digital Media</SelectItem>
-                  <SelectItem value="Video Production">Video Production</SelectItem>
-                  <SelectItem value="Social Media">Social Media</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="logo">Logo URL</Label>
               <Input
                 id="logo"
@@ -273,6 +256,21 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
                 onChange={handleInputChange}
                 placeholder="Enter logo URL"
               />
+            </div>
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="industry">Industry</Label>
+              <Select name="industry" value={formData.industry} onValueChange={(value) => handleSelectChange("industry", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select industry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Entertainment">Entertainment</SelectItem>
+                  <SelectItem value="Content Creation">Content Creation</SelectItem>
+                  <SelectItem value="Digital Media">Digital Media</SelectItem>
+                  <SelectItem value="Video Production">Video Production</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
