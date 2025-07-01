@@ -192,7 +192,11 @@ export function SimpleInvoicesList({
               </TableCell>
               <TableCell>{invoice.client_name}</TableCell>
               <TableCell>{new Date(invoice.issue_date).toLocaleDateString()}</TableCell>
-              <TableCell>${invoice.amount.toFixed(2)}</TableCell>
+              <TableCell>
+                ${typeof invoice.amount === 'number'
+                  ? invoice.amount.toFixed(2)
+                  : parseFloat(invoice.amount).toFixed(2)}
+              </TableCell>
               <TableCell>
                 <Badge
                   variant={
