@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react'
-import { apiClient } from '@/lib/api-client'
+import { api } from '@/lib/api-client'
 
 export default function DebugPage() {
     const [results, setResults] = useState<string[]>([])
@@ -17,7 +17,7 @@ export default function DebugPage() {
 
         try {
             addResult('Testing API connection...')
-            const health = await apiClient.healthCheck()
+            const health = await api.healthCheck()
             addResult(`Health check: ${JSON.stringify(health)}`)
 
             if (health.success) {
@@ -25,7 +25,7 @@ export default function DebugPage() {
 
                 // Test login
                 addResult('Testing login...')
-                const loginResult = await apiClient.login('admin@ascendmedia.com', 'admin123')
+                const loginResult = await api.login('admin@ascendmedia.com', 'admin123')
                 addResult(`Login result: ${JSON.stringify(loginResult)}`)
 
                 if (loginResult.success) {
@@ -33,7 +33,7 @@ export default function DebugPage() {
 
                     // Test authenticated endpoint
                     addResult('Testing authenticated endpoint...')
-                    const userResult = await apiClient.getCurrentUser()
+                    const userResult = await api.getCurrentUser()
                     addResult(`Current user: ${JSON.stringify(userResult)}`)
                 } else {
                     addResult('❌ Login failed')
