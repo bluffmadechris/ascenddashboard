@@ -1,96 +1,168 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from "date-fns"
-import { cn } from "@/lib/utils"
-import type { Availability } from "@/lib/calendar-utils"
+import { format, parseISO } from "date-fns"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Select } from "@/components/ui/select"
+import { api } from "@/lib/api-client"
+import { toast } from "sonner"
+import { CalendarMonthView } from "./calendar-month-view"
 
-interface AvailabilityCalendarProps {
-  month: Date
-  availability: Availability | null
-  selectedDays: Date[]
-  onSelectDay: (day: Date) => void
+interface Viewer {
+  id: string
+  name: string
 }
 
-export function AvailabilityCalendar({ month, availability, selectedDays, onSelectDay }: AvailabilityCalendarProps) {
-  const [days, setDays] = useState<Date[]>([])
-  const [weekdays] = useState(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"])
+interface AvailabilityCalendarProps {
+  userId: string
+  isEditable?: boolean
+  onAvailabilityChange?: (availability: any) => void
+}
 
-  // Generate days for the month
+export function AvailabilityCalendar({
+  userId,
+  isEditable = false,
+  onAvailabilityChange
+}: AvailabilityCalendarProps) {
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [availability, setAvailability] = useState<any[]>([])
+  const [events, setEvents] = useState<any[]>([])
+  const [viewers, setViewers] = useState<Viewer[]>([])
+  const [selectedViewers, setSelectedViewers] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
   useEffect(() => {
-    const start = startOfMonth(month)
-    const end = endOfMonth(month)
-    const daysInMonth = eachDayOfInterval({ start, end })
-    setDays(daysInMonth)
-  }, [month])
-
-  // Check if a day is available
-  const isDayAvailable = (day: Date): boolean => {
-    if (!availability) return false
-
-    const dateStr = format(day, "yyyy-MM-dd")
-    const dateAvail = availability.dates.find((d) => d.date === dateStr)
-
-    // If no specific availability is set, default to available on weekdays
-    if (!dateAvail) {
-      const dayOfWeek = day.getDay()
-      return dayOfWeek >= 1 && dayOfWeek <= 5 // Monday to Friday
+    const fetchData = async () => {
+      try {
+        setIsLoading(true)
+        const [availabilityRes, eventsRes] = await Promise.all([
+          api.get(`/users/${userId}/availability`),
+          api.get(`/users/${userId}/events`)
+        ])
+        setAvailability(availabilityRes.data)
+        setEvents(eventsRes.data)
+        setIsLoading(false)
+      } catch (error) {
+        toast.error("Failed to fetch calendar data")
+        setIsLoading(false)
+      }
     }
+    fetchData()
+  }, [userId])
 
-    return dateAvail.available
+  const handleDateSelect = async (date: Date) => {
+    if (!isEditable) return
+
+    try {
+      const newAvailability = {
+        date: format(date, "yyyy-MM-dd"),
+        isAvailable: !availability.find(a =>
+          format(parseISO(a.date), "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
+        )?.isAvailable
+      }
+
+      await api.post(`/users/${userId}/availability`, newAvailability)
+
+      setAvailability(prev => {
+        const existing = prev.find(a =>
+          format(parseISO(a.date), "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
+        )
+        if (existing) {
+          return prev.map(a =>
+            format(parseISO(a.date), "yyyy-MM-dd") === format(date, "yyyy-MM-dd")
+              ? { ...a, isAvailable: !a.isAvailable }
+              : a
+          )
+        }
+        return [...prev, newAvailability]
+      })
+
+      if (onAvailabilityChange) {
+        onAvailabilityChange(availability)
+      }
+    } catch (error) {
+      toast.error("Failed to update availability")
+    }
   }
 
-  // Check if a day is selected
-  const isDaySelected = (day: Date): boolean => {
-    return selectedDays.some((d) => isSameDay(d, day))
+  const handleViewerChange = async (viewerId: string) => {
+    try {
+      if (selectedViewers.includes(viewerId)) {
+        setSelectedViewers(prev => prev.filter(id => id !== viewerId))
+      } else {
+        setSelectedViewers(prev => [...prev, viewerId])
+        // Fetch viewer's events
+        const viewerEvents = await api.get(`/users/${viewerId}/events`)
+        setEvents(prev => [...prev, ...viewerEvents.data])
+      }
+    } catch (error) {
+      toast.error("Failed to update viewer")
+    }
   }
 
-  // Get day class names based on availability and selection
-  const getDayClassNames = (day: Date) => {
-    const isAvailable = isDayAvailable(day)
-    const isSelected = isDaySelected(day)
-
-    return cn(
-      "flex items-center justify-center h-10 w-10 rounded-full text-sm font-medium",
-      isToday(day) && "border border-gray-300",
-      !isSameMonth(day, month) && "text-gray-400",
-      isSameMonth(day, month) && !isAvailable && !isSelected && "bg-red-100 hover:bg-red-200 text-red-800",
-      isSameMonth(day, month) && isAvailable && !isSelected && "bg-green-100 hover:bg-green-200 text-green-800",
-      isSelected && "ring-2 ring-offset-2 ring-blue-500",
-      isSelected && isAvailable && "bg-green-200",
-      isSelected && !isAvailable && "bg-red-200",
-    )
+  if (isLoading) {
+    return <div>Loading...</div>
   }
 
   return (
-    <div className="w-full">
-      <div className="grid grid-cols-7 gap-1 mb-1">
-        {weekdays.map((day) => (
-          <div key={day} className="text-center text-sm font-medium text-gray-500">
-            {day}
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex justify-between items-center">
+            <CardTitle>Availability Calendar</CardTitle>
+            {isEditable && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span>Click on dates to toggle availability</span>
+              </div>
+            )}
           </div>
-        ))}
-      </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {viewers.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium mb-3">Team Members</h3>
+              <div className="flex flex-wrap gap-2">
+                {viewers.map(viewer => (
+                  <Button
+                    key={viewer.id}
+                    variant={selectedViewers.includes(viewer.id) ? "default" : "outline"}
+                    onClick={() => handleViewerChange(viewer.id)}
+                    className="text-sm"
+                    size="sm"
+                  >
+                    {viewer.name}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
 
-      <div className="grid grid-cols-7 gap-1">
-        {/* Add empty cells for days before the start of the month */}
-        {days.length > 0 &&
-          Array.from({ length: (days[0].getDay() + 6) % 7 }).map((_, i) => (
-            <div key={`empty-start-${i}`} className="h-10" />
-          ))}
+          <div className="mb-4 flex items-center justify-end gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500" />
+              <span className="text-sm">Available</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-red-500" />
+              <span className="text-sm">Unavailable</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-100" />
+              <span className="text-sm">Events</span>
+            </div>
+          </div>
 
-        {/* Render days of the month */}
-        {days.map((day) => (
-          <button
-            key={day.toString()}
-            type="button"
-            onClick={() => onSelectDay(day)}
-            className={getDayClassNames(day)}
-          >
-            {format(day, "d")}
-          </button>
-        ))}
-      </div>
+          <div className="border rounded-lg overflow-hidden">
+            <CalendarMonthView
+              selectedDate={selectedDate}
+              onDateSelect={handleDateSelect}
+              events={events}
+              availability={availability}
+            />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

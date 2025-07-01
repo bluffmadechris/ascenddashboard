@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { format, parseISO } from "date-fns"
 import { CalendarIcon, MapPin, AlignLeft, Users, Bell, Repeat, Pencil, Trash } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -21,26 +21,73 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { CalendarEvent } from "@/lib/calendar-utils"
 import { Badge } from "@/components/ui/badge"
+import { api } from "@/lib/api-client"
+import { toast } from "sonner"
 
 interface ViewEventDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  event: CalendarEvent
-  onEventUpdated: () => void
-  onEventDeleted: () => void
+  isOpen: boolean
+  onClose: () => void
+  eventId: string
 }
 
-export function ViewEventDialog({ open, onOpenChange, event, onEventUpdated, onEventDeleted }: ViewEventDialogProps) {
+interface EventViewer {
+  id: string
+  name: string
+  email: string
+}
+
+interface Event {
+  id: string
+  title: string
+  description: string
+  start: string
+  end: string
+  viewers: EventViewer[]
+  createdBy: {
+    name: string
+    email: string
+  }
+}
+
+export function ViewEventDialog({
+  isOpen,
+  onClose,
+  eventId,
+}: ViewEventDialogProps) {
   const { user } = useAuth()
-  const { toast } = useToast()
+  const { toast: useToastToast } = useToast()
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [event, setEvent] = useState<Event | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchEvent = async () => {
+      if (!eventId) return
+
+      try {
+        setIsLoading(true)
+        setError(null)
+        const response = await api.get(`/calendar/events/${eventId}`)
+        setEvent(response.data)
+      } catch (error) {
+        setError("Failed to load event details")
+        useToastToast.error("Failed to load event details")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (isOpen) {
+      fetchEvent()
+    }
+  }, [eventId, isOpen, useToastToast])
 
   // Format date and time
-  const formatDateTime = (isoString: string) => {
+  const formatDateTime = (dateStr: string) => {
     try {
-      const date = parseISO(isoString)
-      return format(date, "EEEE, MMMM d, yyyy 'at' h:mm a")
+      return format(new Date(dateStr), "PPp")
     } catch (error) {
       return "Invalid date"
     }
@@ -48,23 +95,22 @@ export function ViewEventDialog({ open, onOpenChange, event, onEventUpdated, onE
 
   // Check if user can edit/delete the event
   const canModifyEvent = () => {
-    return user && (user.role === "owner" || event.createdBy === user.id)
+    return user && (user.role === "owner" || event?.createdBy.email === user.email)
   }
 
   // Handle event deletion
   const handleDeleteEvent = () => {
     try {
-      deleteCalendarEvent(event.id)
-      toast({
+      deleteCalendarEvent(event?.id)
+      useToastToast({
         title: "Success",
         description: "Event deleted successfully",
       })
-      onEventDeleted()
+      onClose()
       setShowDeleteDialog(false)
-      onOpenChange(false)
     } catch (error) {
       console.error("Error deleting event:", error)
-      toast({
+      useToastToast({
         title: "Error",
         description: "Failed to delete event",
         variant: "destructive",
@@ -74,7 +120,7 @@ export function ViewEventDialog({ open, onOpenChange, event, onEventUpdated, onE
 
   // Get event type label
   const getEventTypeLabel = () => {
-    switch (event.type) {
+    switch (event?.type) {
       case "meeting":
         return "Meeting"
       case "personal":
@@ -88,82 +134,55 @@ export function ViewEventDialog({ open, onOpenChange, event, onEventUpdated, onE
 
   return (
     <>
-      <Dialog open={open && !showEditDialog} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[550px]">
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-semibold">{event.title}</DialogTitle>
+            <DialogTitle>
+              {isLoading ? "Loading..." : error ? "Error" : event?.title}
+            </DialogTitle>
           </DialogHeader>
 
-          <div className="py-4 space-y-4">
-            <div className="flex items-start gap-3">
-              <CalendarIcon className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div className="space-y-1">
-                <div>{formatDateTime(event.start)}</div>
-                <div>{formatDateTime(event.end)}</div>
-                {event.isRecurring && (
-                  <div className="text-sm text-muted-foreground flex items-center mt-1">
-                    <Repeat className="h-3 w-3 mr-1" />
-                    Recurring event
-                  </div>
-                )}
+          {isLoading ? (
+            <div className="py-6">Loading event details...</div>
+          ) : error ? (
+            <div className="py-6 text-red-500">{error}</div>
+          ) : event ? (
+            <div className="py-4 space-y-4">
+              <div>
+                <h3 className="font-medium mb-1">Time</h3>
+                <p className="text-sm text-muted-foreground">
+                  {formatDateTime(event.start)} - {formatDateTime(event.end)}
+                </p>
               </div>
-            </div>
 
-            {event.location && (
-              <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>{event.location}</div>
+              {event.description && (
+                <div>
+                  <h3 className="font-medium mb-1">Description</h3>
+                  <p className="text-sm text-muted-foreground">{event.description}</p>
+                </div>
+              )}
+
+              <div>
+                <h3 className="font-medium mb-1">Created By</h3>
+                <p className="text-sm text-muted-foreground">
+                  {event.createdBy.name} ({event.createdBy.email})
+                </p>
               </div>
-            )}
 
-            {event.description && (
-              <div className="flex items-start gap-3">
-                <AlignLeft className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div className="whitespace-pre-wrap">{event.description}</div>
-              </div>
-            )}
-
-            <div className="flex items-start gap-3">
-              <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div className="space-y-1">
-                <div>Organizer: {event.createdBy}</div>
-                {event.assignedTo && event.assignedTo.length > 0 && (
-                  <div>
-                    <div className="text-sm text-muted-foreground mb-1">Participants:</div>
-                    <div className="flex flex-wrap gap-1">
-                      {event.assignedTo.map((id) => (
-                        <Badge key={id} variant="outline">
-                          {id}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {event.reminders && event.reminders.length > 0 && (
-              <div className="flex items-start gap-3">
-                <Bell className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground mb-1">Reminders:</div>
-                  <div className="flex flex-wrap gap-1">
-                    {event.reminders.map((reminder) => (
-                      <Badge key={reminder.id} variant="outline">
-                        {reminder.time} {reminder.unit} before ({reminder.type})
-                      </Badge>
+              {event.viewers && event.viewers.length > 0 && (
+                <div>
+                  <h3 className="font-medium mb-1">Viewers</h3>
+                  <div className="space-y-1">
+                    {event.viewers.map((viewer) => (
+                      <p key={viewer.id} className="text-sm text-muted-foreground">
+                        {viewer.name} ({viewer.email})
+                      </p>
                     ))}
                   </div>
                 </div>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 mt-4">
-              <Badge style={{ backgroundColor: event.color }} className="text-white">
-                {getEventTypeLabel()}
-              </Badge>
+              )}
             </div>
-          </div>
+          ) : null}
 
           <DialogFooter>
             {canModifyEvent() && (
@@ -188,9 +207,9 @@ export function ViewEventDialog({ open, onOpenChange, event, onEventUpdated, onE
           open={showEditDialog}
           onOpenChange={setShowEditDialog}
           event={event}
-          onEventUpdated={() => {
-            onEventUpdated()
-            onOpenChange(false)
+          onEventUpdated={(updatedEvent) => {
+            setEvent(updatedEvent)
+            onClose()
           }}
         />
       )}
@@ -201,8 +220,8 @@ export function ViewEventDialog({ open, onOpenChange, event, onEventUpdated, onE
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the event "{event.title}".
-              {event.isRecurring && " This will delete all instances of this recurring event."}
+              This will permanently delete the event "{event?.title}".
+              {event?.isRecurring && " This will delete all instances of this recurring event."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

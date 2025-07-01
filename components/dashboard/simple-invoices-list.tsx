@@ -10,6 +10,18 @@ import { useAuth } from "@/lib/auth-context"
 import Link from "next/link"
 import { apiClient } from "@/lib/api-client"
 import { generateInvoicePDF } from "@/lib/pdf-generator"
+import { format } from "date-fns"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 
 type InvoiceItem = {
   id: string
@@ -43,11 +55,13 @@ export function SimpleInvoicesList({
   limit?: number
   filterBy?: FilterOptions
 }) {
-  const { toast } = useToast()
+  const { toast: useToastToast } = useToast()
   const { user } = useAuth()
   const [invoices, setInvoices] = useState<SimpleInvoice[]>([])
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [selectedInvoice, setSelectedInvoice] = useState<SimpleInvoice | null>(null)
 
   // Check if user is owner
   const isOwner = user?.role === "owner"
@@ -92,7 +106,7 @@ export function SimpleInvoicesList({
         setInvoices(allInvoices)
       } catch (error) {
         console.error("Error loading invoices:", error)
-        toast({
+        useToastToast({
           title: "Error loading invoices",
           description: "There was a problem loading the invoices.",
           variant: "destructive",
@@ -110,12 +124,12 @@ export function SimpleInvoicesList({
     }, 30000) // Poll every 30 seconds
 
     return () => clearInterval(intervalId)
-  }, [initialized, user?.id, isOwner, filterBy, toast])
+  }, [initialized, user?.id, isOwner, filterBy, useToastToast])
 
   const handleDeleteInvoice = async (invoiceId: string, invoice: SimpleInvoice) => {
     // Only owners and invoice creators can delete
     if (!isOwner && invoice.created_by !== user?.id) {
-      toast({
+      useToastToast({
         title: "Permission denied",
         description: "You can only delete your own invoices.",
         variant: "destructive",
@@ -135,18 +149,38 @@ export function SimpleInvoicesList({
         // Update local state
         setInvoices(invoices.filter(inv => inv.id !== invoiceId))
 
-        toast({
+        useToastToast({
           title: "Invoice deleted",
           description: `Invoice "${invoice.description}" has been deleted.`,
         })
       } catch (error) {
         console.error("Error deleting invoice:", error)
-        toast({
+        useToastToast({
           title: "Error deleting invoice",
           description: "There was a problem deleting the invoice.",
           variant: "destructive",
         })
       }
+    }
+  }
+
+  const handleDeleteClick = (invoice: SimpleInvoice) => {
+    setSelectedInvoice(invoice)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!selectedInvoice) return
+
+    try {
+      await apiClient.deleteInvoice(parseInt(selectedInvoice.id))
+      toast.success("Invoice deleted successfully")
+      setInvoices(invoices.filter(inv => inv.id !== selectedInvoice.id))
+    } catch (error) {
+      toast.error("Failed to delete invoice")
+    } finally {
+      setDeleteDialogOpen(false)
+      setSelectedInvoice(null)
     }
   }
 
@@ -213,7 +247,8 @@ export function SimpleInvoicesList({
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDeleteInvoice(invoice.id, invoice)}
+                      onClick={() => handleDeleteClick(invoice)}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       title="Delete Invoice"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -232,6 +267,23 @@ export function SimpleInvoicesList({
           )}
         </TableBody>
       </Table>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Invoice</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete invoice #{selectedInvoice?.invoice_number}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

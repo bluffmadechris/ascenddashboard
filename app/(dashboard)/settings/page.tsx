@@ -12,9 +12,9 @@ import { toast } from "sonner"
 export default function SettingsPage() {
   const { user, updateUser } = useAuth()
   const [settings, setSettings] = useState({
-    darkMode: false,
-    language: "en",
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    darkMode: user?.settings?.darkMode || false,
+    language: user?.settings?.language || "en",
+    timezone: user?.settings?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
   })
 
   const handleSettingChange = (key: string, value: any) => {

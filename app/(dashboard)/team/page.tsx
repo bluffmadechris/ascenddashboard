@@ -17,12 +17,14 @@ import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TeamHierarchyDisplay } from "@/components/dashboard/team-hierarchy-display"
+import { TeamMembersList } from "@/components/dashboard/team-members-list"
+import { OrgChart } from "@/components/org-chart/org-chart"
 
 export default function TeamPage() {
   const { users } = useAuth()
   const { getDisplayTitle } = useDisplayTitle()
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedView, setSelectedView] = useState<"hierarchy" | "org-chart" | "grid" | "calendar">("hierarchy")
+  const [selectedView, setSelectedView] = useState<"list" | "org">("list")
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [visibilityStates, setVisibilityStates] = useState<Record<string, boolean>>({})
   const [filterRole, setFilterRole] = useState<string | null>(null)
@@ -216,85 +218,33 @@ export default function TeamPage() {
   const { owners, management, creative } = organizeByHierarchy(filteredUsers)
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-7xl">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Team</h1>
-
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search team members..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-full sm:w-[300px]"
-            />
-          </div>
-
-          <div className="flex gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-[120px]">
-                  <Filter className="mr-2 h-4 w-4" />
-                  {filterRole ? "Filtered" : "Filter"}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[200px]">
-                <DropdownMenuItem onClick={() => setFilterRole(null)}>All Roles</DropdownMenuItem>
-                {uniqueRoles.map((role) => (
-                  <DropdownMenuItem key={role} onClick={() => setFilterRole(role)}>
-                    {role.charAt(0).toUpperCase() + role.slice(1).replace(/_/g, " ")}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Button
-              variant={selectedView === "hierarchy" ? "default" : "outline"}
-              onClick={() => setSelectedView("hierarchy")}
-              className="w-[120px]"
-            >
-              <Building className="mr-2 h-4 w-4" />
-              Team View
-            </Button>
-          </div>
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold">Team</h1>
+        <div className="flex gap-2">
+          <Button
+            variant={selectedView === "list" ? "default" : "outline"}
+            onClick={() => setSelectedView("list")}
+          >
+            List View
+          </Button>
+          <Button
+            variant={selectedView === "org" ? "default" : "outline"}
+            onClick={() => setSelectedView("org")}
+          >
+            Organization View
+          </Button>
         </div>
       </div>
 
-      <div className="space-y-6">
-        {filteredUsers.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="h-12 w-12 mx-auto text-muted-foreground" />
-            <h2 className="mt-4 text-lg font-medium">No team members found</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Try adjusting your search or filter criteria
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {renderHierarchySection(
-              "Leadership Team",
-              owners,
-              <Crown className="h-6 w-6 text-purple-600" />,
-              "Company owners, presidents, and executive leadership"
-            )}
-
-            {renderHierarchySection(
-              "Management Team",
-              management,
-              <Building className="h-6 w-6 text-blue-600" />,
-              "Managers, directors, and team leads overseeing departments"
-            )}
-
-            {renderHierarchySection(
-              "Creative Team",
-              creative,
-              <Palette className="h-6 w-6 text-amber-600" />,
-              "Designers, editors, content creators, and specialists"
-            )}
-          </div>
-        )}
-      </div>
+      {selectedView === "list" ? (
+        <TeamMembersList />
+      ) : (
+        <OrgChart onMemberClick={(member) => {
+          // Handle member click if needed
+          console.log("Member clicked:", member);
+        }} />
+      )}
     </div>
   )
 }

@@ -1,152 +1,156 @@
 "use client"
 
-import { useMemo } from "react"
+import { useState } from "react"
 import {
   format,
+  startOfWeek,
+  addDays,
   startOfMonth,
   endOfMonth,
-  eachDayOfInterval,
-  isSameDay,
   isSameMonth,
+  isSameDay,
   isToday,
   parseISO,
   isValid,
 } from "date-fns"
 import type { CalendarEvent } from "@/lib/calendar-utils"
 import { cn } from "@/lib/utils"
+import { Card } from "../ui/card"
 
 interface CalendarMonthViewProps {
-  currentDate: Date
-  events: CalendarEvent[]
-  onEventClick: (event: CalendarEvent) => void
-  onDateClick: (date: Date) => void
-  onCreateEventAtTime: (date: Date) => void
+  selectedDate: Date
+  onDateSelect: (date: Date) => void
+  events?: CalendarEvent[]
+  availability?: any[]
 }
 
 export function CalendarMonthView({
-  currentDate,
-  events,
-  onEventClick,
-  onDateClick,
-  onCreateEventAtTime,
+  selectedDate,
+  onDateSelect,
+  events = [],
+  availability = []
 }: CalendarMonthViewProps) {
-  // Calculate days for the current month view
-  const calendarDays = useMemo(() => {
-    if (!isValid(currentDate)) {
-      return eachDayOfInterval({ start: startOfMonth(new Date()), end: endOfMonth(new Date()) })
-    }
-    const start = startOfMonth(currentDate)
-    const end = endOfMonth(currentDate)
-    return eachDayOfInterval({ start, end })
-  }, [currentDate])
+  const [currentMonth, setCurrentMonth] = useState(new Date())
 
-  // Get events for a specific date
-  const getEventsForDate = (date: Date) => {
-    if (!isValid(date)) return []
-
-    return events.filter((event) => {
-      try {
-        const eventDate = parseISO(event.start)
-        return isValid(eventDate) && isSameDay(eventDate, date)
-      } catch (error) {
-        return false
-      }
-    })
+  const renderHeader = () => {
+    return (
+      <div className="flex items-center justify-between p-4 border-b">
+        <h2 className="text-lg font-semibold">
+          {format(currentMonth, "MMMM yyyy")}
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}
+            className="p-2 hover:bg-gray-100 rounded-md"
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}
+            className="p-2 hover:bg-gray-100 rounded-md"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    )
   }
 
-  // Format time from ISO string
-  const formatTimeFromISO = (isoString: string) => {
-    try {
-      const date = parseISO(isoString)
-      if (!isValid(date)) return "Invalid time"
+  const renderDays = () => {
+    const dateFormat = "EEEE"
+    const days = []
+    const startDate = startOfWeek(currentMonth)
 
-      return format(date, "h:mm a")
-    } catch (error) {
-      return "Invalid time"
+    for (let i = 0; i < 7; i++) {
+      days.push(
+        <div key={i} className="font-semibold text-center py-2 border-b">
+          {format(addDays(startDate, i), dateFormat)}
+        </div>
+      )
     }
+
+    return <div className="grid grid-cols-7">{days}</div>
+  }
+
+  const renderCells = () => {
+    const monthStart = startOfMonth(currentMonth)
+    const monthEnd = endOfMonth(monthStart)
+    const startDate = startOfWeek(monthStart)
+    const endDate = endOfMonth(monthEnd)
+
+    const rows = []
+    let days = []
+    let day = startDate
+
+    while (day <= endDate) {
+      for (let i = 0; i < 7; i++) {
+        const cloneDay = day
+        const isSelected = isSameDay(selectedDate, day)
+        const isCurrentMonth = isSameMonth(day, monthStart)
+
+        // Find events for this day
+        const dayEvents = events.filter(event =>
+          isSameDay(new Date(event.date), day)
+        )
+
+        // Find availability for this day
+        const dayAvailability = availability.find(a =>
+          isSameDay(new Date(a.date), day)
+        )
+
+        days.push(
+          <div
+            key={day.toString()}
+            className={`min-h-[100px] p-2 border relative ${!isCurrentMonth ? "bg-gray-50 text-gray-400" : ""
+              } ${isSelected ? "bg-blue-50" : ""}`}
+            onClick={() => onDateSelect(cloneDay)}
+          >
+            <div className="font-medium">{format(day, "d")}</div>
+
+            {/* Events */}
+            <div className="space-y-1 mt-1">
+              {dayEvents.map((event, index) => (
+                <div
+                  key={index}
+                  className="text-xs p-1 bg-blue-100 rounded truncate"
+                  title={event.title}
+                >
+                  {event.title}
+                </div>
+              ))}
+            </div>
+
+            {/* Availability Indicator */}
+            {dayAvailability && (
+              <div
+                className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${dayAvailability.isAvailable ? "bg-green-500" : "bg-red-500"
+                  }`}
+              />
+            )}
+          </div>
+        )
+        day = addDays(day, 1)
+      }
+      rows.push(
+        <div key={day.toString()} className="grid grid-cols-7">
+          {days}
+        </div>
+      )
+      days = []
+    }
+
+    return <div className="flex-1">{rows}</div>
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Calendar Header - Days of Week */}
-      <div className="grid grid-cols-7 bg-muted/20">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-          <div key={day} className="p-3 text-center font-medium">
-            {day}
-          </div>
-        ))}
+    <Card className="h-full flex flex-col overflow-hidden">
+      {renderHeader()}
+      <div className="flex-1 overflow-auto">
+        <div className="min-w-[800px]"> {/* Minimum width to prevent squishing */}
+          {renderDays()}
+          {renderCells()}
+        </div>
       </div>
-
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 flex-1 overflow-hidden">
-        {/* Fill in days before the first of the month */}
-        {Array.from({ length: calendarDays[0]?.getDay() || 0 }).map((_, index) => (
-          <div key={`empty-start-${index}`} className="border-b border-r p-2 bg-muted/10"></div>
-        ))}
-
-        {/* Calendar Days */}
-        {calendarDays.map((day) => {
-          if (!isValid(day)) return null
-
-          const dayEvents = getEventsForDate(day)
-          const isCurrentDay = isToday(day)
-          const isCurrentMonth = isSameMonth(day, currentDate)
-
-          return (
-            <div
-              key={day.toString()}
-              className={cn(
-                "border-b border-r p-2 transition-colors overflow-hidden",
-                isCurrentDay ? "bg-blue-50 dark:bg-blue-900/20" : "",
-                !isCurrentMonth ? "bg-muted/10 text-muted-foreground" : "",
-                "hover:bg-muted/20 cursor-pointer",
-              )}
-              onClick={() => onDateClick(day)}
-              onDoubleClick={() => onCreateEventAtTime(day)}
-            >
-              <div className="flex justify-between items-start">
-                <span
-                  className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded-full text-sm",
-                    isCurrentDay ? "bg-primary text-primary-foreground" : "",
-                  )}
-                >
-                  {format(day, "d")}
-                </span>
-              </div>
-
-              {/* Events for this day */}
-              <div className="mt-1 space-y-1 max-h-[80px] overflow-y-auto">
-                {dayEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="text-xs p-1 rounded truncate cursor-pointer hover:bg-primary/10"
-                    style={{ backgroundColor: `${event.color}30` }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onEventClick(event)
-                    }}
-                  >
-                    <div className="flex items-center">
-                      <div
-                        className="w-2 h-2 rounded-full mr-1 flex-shrink-0"
-                        style={{ backgroundColor: event.color }}
-                      ></div>
-                      <span className="truncate">{event.title}</span>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">{formatTimeFromISO(event.start)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )
-        })}
-
-        {/* Fill in days after the last day of the month */}
-        {Array.from({ length: 6 - (calendarDays[calendarDays.length - 1]?.getDay() || 0) }).map((_, index) => (
-          <div key={`empty-end-${index}`} className="border-b border-r p-2 bg-muted/10"></div>
-        ))}
-      </div>
-    </div>
+    </Card>
   )
 }
