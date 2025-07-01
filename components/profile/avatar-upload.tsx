@@ -8,6 +8,7 @@ import { Camera, Loader2 } from "lucide-react"
 import { getInitials } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
+import { apiClient } from "@/lib/api-client"
 
 export function AvatarUpload({
   currentAvatar,
@@ -55,10 +56,12 @@ export function AvatarUpload({
       formData.append('avatar', file)
 
       // Upload to S3 through our API
-      const response = await fetch(`/api/users/${user?.id}/avatar`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${user?.id}/avatar`, {
         method: 'POST',
         body: formData,
-        credentials: 'include'
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
       })
 
       const data = await response.json()
@@ -68,7 +71,7 @@ export function AvatarUpload({
       }
 
       // Update avatar with the signed URL from the response
-      onAvatarChange(data.data.user.avatar_url)
+      onAvatarChange(data.data.avatar_url)
       toast({
         title: "Success",
         description: "Profile picture updated successfully"
