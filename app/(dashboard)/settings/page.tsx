@@ -1,86 +1,78 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
+import { useAuth } from "@/lib/auth-context"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/components/ui/use-toast"
-import { DataManagement } from "@/components/dashboard/data-management"
+import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
+import { api } from "@/lib/api-client"
+import { toast } from "sonner"
 
 export default function SettingsPage() {
-  const { toast } = useToast()
-  const [emailNotifications, setEmailNotifications] = useState(true)
-  const [marketingEmails, setMarketingEmails] = useState(false)
-  const [smsNotifications, setSmsNotifications] = useState(false)
-  const [pushNotifications, setPushNotifications] = useState(true)
+  const { user, updateUser } = useAuth()
+  const [settings, setSettings] = useState({
+    darkMode: false,
+    language: "en",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  })
 
-  const handleSaveSettings = () => {
-    // In a real app, you would save these settings to a database
-    toast({
-      title: "Settings saved",
-      description: "Your notification preferences have been updated.",
-    })
+  const handleSettingChange = (key: string, value: any) => {
+    setSettings(prev => ({ ...prev, [key]: value }))
+  }
+
+  const handleSave = async () => {
+    try {
+      await api.put(`/users/${user?.id}/settings`, settings)
+      updateUser({ ...user, settings })
+      toast.success("Settings updated successfully")
+    } catch (error) {
+      toast.error("Failed to update settings")
+    }
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">Manage your account settings and preferences.</p>
-      </div>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>General Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium">Dark Mode</label>
+            <Switch
+              checked={settings.darkMode}
+              onCheckedChange={(checked) => handleSettingChange("darkMode", checked)}
+            />
+          </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Notification Preferences</CardTitle>
-            <CardDescription>Choose how you want to be notified about updates and activity.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between space-x-2">
-              <Label htmlFor="email-notifications" className="flex flex-col space-y-1">
-                <span>Email Notifications</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  Receive emails about your account activity.
-                </span>
-              </Label>
-              <Switch id="email-notifications" checked={emailNotifications} onCheckedChange={setEmailNotifications} />
-            </div>
-            <div className="flex items-center justify-between space-x-2">
-              <Label htmlFor="marketing-emails" className="flex flex-col space-y-1">
-                <span>Marketing Emails</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  Receive emails about new features and promotions.
-                </span>
-              </Label>
-              <Switch id="marketing-emails" checked={marketingEmails} onCheckedChange={setMarketingEmails} />
-            </div>
-            <div className="flex items-center justify-between space-x-2">
-              <Label htmlFor="sms-notifications" className="flex flex-col space-y-1">
-                <span>SMS Notifications</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  Receive text messages for important updates.
-                </span>
-              </Label>
-              <Switch id="sms-notifications" checked={smsNotifications} onCheckedChange={setSmsNotifications} />
-            </div>
-            <div className="flex items-center justify-between space-x-2">
-              <Label htmlFor="push-notifications" className="flex flex-col space-y-1">
-                <span>Push Notifications</span>
-                <span className="text-xs font-normal text-muted-foreground">
-                  Receive push notifications in your browser.
-                </span>
-              </Label>
-              <Switch id="push-notifications" checked={pushNotifications} onCheckedChange={setPushNotifications} />
-            </div>
-            <Button onClick={handleSaveSettings} className="mt-4">
-              Save Preferences
-            </Button>
-          </CardContent>
-        </Card>
+          <div>
+            <label className="block text-sm font-medium mb-1">Language</label>
+            <select
+              className="w-full p-2 border rounded-md"
+              value={settings.language}
+              onChange={(e) => handleSettingChange("language", e.target.value)}
+            >
+              <option value="en">English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+            </select>
+          </div>
 
-        <DataManagement />
-      </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Timezone</label>
+            <Input
+              type="text"
+              value={settings.timezone}
+              onChange={(e) => handleSettingChange("timezone", e.target.value)}
+            />
+          </div>
+
+          <Button onClick={handleSave} className="w-full">
+            Save Changes
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

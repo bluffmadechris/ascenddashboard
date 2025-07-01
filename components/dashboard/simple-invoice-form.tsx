@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
 
 type InvoiceItem = {
   id: string
@@ -25,13 +26,14 @@ type InvoiceItem = {
   amount: number
 }
 
-export function SimpleInvoiceForm({
-  onInvoiceCreated,
-}: {
-  onInvoiceCreated?: () => void
-}) {
-  const { toast } = useToast()
+interface SimpleInvoiceFormProps {
+  onSubmit: (data: any) => void;
+  initialData?: any;
+}
+
+export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormProps) {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
@@ -163,8 +165,8 @@ export function SimpleInvoiceForm({
       setItems([{ id: uuidv4(), description: "", quantity: 1, amount: 0 }])
 
       // Call the callback if provided
-      if (onInvoiceCreated) {
-        onInvoiceCreated()
+      if (onSubmit) {
+        onSubmit(response.data)
       }
     } catch (error) {
       console.error('Error creating invoice:', error)
@@ -176,6 +178,18 @@ export function SimpleInvoiceForm({
       })
     }
   }
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!initialData?.id) return;
+
+    try {
+      await apiClient.put(`/invoices/status/${initialData.id}`, { status: newStatus });
+      setInitialStatus(newStatus);
+      toast.success("Invoice status updated");
+    } catch (error) {
+      toast.error("Failed to update invoice status");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -219,7 +233,7 @@ export function SimpleInvoiceForm({
           {isOwner && (
             <div className="space-y-2">
               <Label>Initial Status</Label>
-              <Select value={initialStatus} onValueChange={setInitialStatus}>
+              <Select value={initialStatus} onValueChange={handleStatusChange}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

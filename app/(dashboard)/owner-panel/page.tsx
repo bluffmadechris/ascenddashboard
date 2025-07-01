@@ -19,6 +19,17 @@ import { Button } from "@/components/ui/button"
 import { TeamProfileEditor } from "@/components/dashboard/team-profile-editor"
 import { SendNotificationForm } from "@/components/dashboard/send-notification"
 import { ProfitStatsManager } from "@/components/dashboard/profit-stats-manager"
+import { api } from "@/lib/api-client"
+import { toast } from "sonner"
+
+interface OwnerStats {
+  totalRevenue: number;
+  monthlyRevenue: number;
+  totalProfit: number;
+  monthlyProfit: number;
+  activeClients: number;
+  totalEmployees: number;
+}
 
 export default function OwnerPanelPage() {
   const { user } = useAuth()
@@ -28,6 +39,15 @@ export default function OwnerPanelPage() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
+  const [stats, setStats] = useState<OwnerStats>({
+    totalRevenue: 0,
+    monthlyRevenue: 0,
+    totalProfit: 0,
+    monthlyProfit: 0,
+    activeClients: 0,
+    totalEmployees: 0
+  })
+  const [isLoading, setIsLoading] = useState(true)
 
   // Check URL parameters on load
   useEffect(() => {
@@ -53,6 +73,29 @@ export default function OwnerPanelPage() {
       setActiveTab("create-role")
     }
   }, [searchParams])
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await api.get('/owner/stats')
+        // Ensure all numeric values are properly converted to numbers
+        const data = {
+          totalRevenue: Number(response.data.totalRevenue) || 0,
+          monthlyRevenue: Number(response.data.monthlyRevenue) || 0,
+          totalProfit: Number(response.data.totalProfit) || 0,
+          monthlyProfit: Number(response.data.monthlyProfit) || 0,
+          activeClients: Number(response.data.activeClients) || 0,
+          totalEmployees: Number(response.data.totalEmployees) || 0
+        }
+        setStats(data)
+        setIsLoading(false)
+      } catch (error) {
+        toast.error("Failed to fetch owner statistics")
+        setIsLoading(false)
+      }
+    }
+    fetchStats()
+  }, [])
 
   // Redirect if not owner or admin
   if (user?.role !== "owner" && user?.role !== "admin") {
@@ -129,6 +172,18 @@ export default function OwnerPanelPage() {
     setSelectedRoleId(null)
     setActiveTab("roles")
     router.push("/owner-panel?tab=roles", { scroll: false })
+  }
+
+  // Helper function to format currency
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(value)
+  }
+
+  if (isLoading) {
+    return <div>Loading...</div>
   }
 
   return (
@@ -316,6 +371,62 @@ export default function OwnerPanelPage() {
 
       <div className="grid gap-6">
         <ProfitStatsManager />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{formatCurrency(stats.totalRevenue)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly Revenue</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{formatCurrency(stats.monthlyRevenue)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Profit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{formatCurrency(stats.totalProfit)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Monthly Profit</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{formatCurrency(stats.monthlyProfit)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Clients</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{stats.activeClients}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Employees</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{stats.totalEmployees}</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

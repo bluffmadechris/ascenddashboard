@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { CalendarIcon, Pencil, Trash2 } from "lucide-react"
 import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner"
 
 type ProfitStat = {
     id: number
@@ -25,13 +26,30 @@ type ProfitStat = {
     updated_at: string
 }
 
+interface ProfitStats {
+    currentMonthRevenue: number;
+    previousMonthRevenue: number;
+    currentMonthProfit: number;
+    previousMonthProfit: number;
+    revenueGrowth: number;
+    profitGrowth: number;
+}
+
 export function ProfitStatsManager() {
     const { toast } = useToast()
     const [profitStats, setProfitStats] = useState<ProfitStat[]>([])
-    const [isLoading, setIsLoading] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
     const [selectedStat, setSelectedStat] = useState<ProfitStat | null>(null)
+    const [stats, setStats] = useState<ProfitStats>({
+        currentMonthRevenue: 0,
+        previousMonthRevenue: 0,
+        currentMonthProfit: 0,
+        previousMonthProfit: 0,
+        revenueGrowth: 0,
+        profitGrowth: 0
+    })
 
     // Form state
     const [amount, setAmount] = useState("")
@@ -57,6 +75,29 @@ export function ProfitStatsManager() {
 
     useEffect(() => {
         fetchProfitStats()
+    }, [])
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                const response = await apiClient.get('/owner/profit-stats')
+                // Ensure all numeric values are properly converted to numbers
+                const data = {
+                    currentMonthRevenue: Number(response.data.currentMonthRevenue) || 0,
+                    previousMonthRevenue: Number(response.data.previousMonthRevenue) || 0,
+                    currentMonthProfit: Number(response.data.currentMonthProfit) || 0,
+                    previousMonthProfit: Number(response.data.previousMonthProfit) || 0,
+                    revenueGrowth: Number(response.data.revenueGrowth) || 0,
+                    profitGrowth: Number(response.data.profitGrowth) || 0
+                }
+                setStats(data)
+                setIsLoading(false)
+            } catch (error) {
+                toast.error("Failed to fetch profit statistics")
+                setIsLoading(false)
+            }
+        }
+        fetchStats()
     }, [])
 
     // Reset form
@@ -167,6 +208,23 @@ export function ProfitStatsManager() {
         setSelectedMonth(new Date(stat.month))
         setNotes(stat.notes || "")
         setIsEditDialogOpen(true)
+    }
+
+    // Helper function to format currency
+    const formatCurrency = (value: number): string => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD'
+        }).format(value)
+    }
+
+    // Helper function to format percentage
+    const formatPercentage = (value: number): string => {
+        return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`
+    }
+
+    if (isLoading) {
+        return <div>Loading...</div>
     }
 
     return (

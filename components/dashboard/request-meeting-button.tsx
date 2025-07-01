@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,6 +22,9 @@ import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
 import { generateId } from "@/lib/uuid"
 import { loadData, saveData } from "@/lib/data-persistence"
+import { api } from "@/lib/api-client"
+import { toast } from "sonner"
+import { DateTimePicker } from "../ui/date-time-picker"
 
 interface RequestMeetingButtonProps {
   ownerId?: string
@@ -60,6 +64,7 @@ export function RequestMeetingButton({
   const [preferredDate, setPreferredDate] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null)
 
   // Determine the target user (owner) based on props
   const targetUserId = ownerId || memberId
@@ -69,6 +74,11 @@ export function RequestMeetingButton({
   if (memberId && !ownerName) {
     const targetUser = users.find(u => u.id.toString() === memberId.toString())
     targetUserName = targetUser?.name || "Team Member"
+  }
+
+  // Only show for employees
+  if (user?.role !== 'employee') {
+    return null
   }
 
   // Handle form submission
@@ -91,59 +101,21 @@ export function RequestMeetingButton({
       return
     }
 
-    if (!preferredDate.trim()) {
-      setError("Preferred date is required")
+    if (!selectedDateTime) {
+      toast.error("Please select a date and time")
       return
     }
 
     setIsSubmitting(true)
 
     try {
-      // Create a new meeting request
-      const newRequest: MeetingRequest = {
-        id: generateId(),
-        requesterId: user.id.toString(),
-        requesterName: user.name,
-        ownerId: targetUserId.toString(),
-        ownerName: targetUserName || "Team Member",
-        subject,
-        description,
-        preferredDates: [preferredDate],
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      // Get existing meeting requests
-      let requests: MeetingRequest[] = []
-
-      try {
-        const loadedRequests = loadData<MeetingRequest[]>("meeting-requests", [])
-        // Ensure we have an array
-        requests = Array.isArray(loadedRequests) ? loadedRequests : []
-      } catch (loadError) {
-        console.error("Error loading meeting requests:", loadError)
-        // Initialize as empty array if there was an error
-        requests = []
-      }
-
-      // Add the new request
-      requests.push(newRequest)
-
-      // Save the updated requests
-      saveData("meeting-requests", requests)
-
-      // Show success message
-      toast({
-        title: "Meeting Request Sent",
-        description: `Your meeting request has been sent to ${targetUserName}`,
+      await api.post('/meetings/request', {
+        targetUserId,
+        proposedDateTime: selectedDateTime.toISOString(),
       })
 
-      // Reset form and close dialog
-      setSubject("")
-      setDescription("")
-      setPreferredDate("")
       setOpen(false)
+      toast.success("Meeting request sent successfully")
     } catch (error) {
       console.error("Meeting request error:", error)
       setError("Failed to send meeting request. Please try again.")
@@ -157,15 +129,16 @@ export function RequestMeetingButton({
 
   return (
     <>
-      <Button
-        onClick={() => setOpen(true)}
-        className={`gap-2 ${className || ""}`}
-        disabled={disabled}
-      >
-        <Plus className="h-4 w-4" /> Request Meeting
-      </Button>
-
       <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button
+            onClick={() => setOpen(true)}
+            className={`gap-2 ${className || ""}`}
+            disabled={disabled}
+          >
+            <Plus className="h-4 w-4" /> Request Meeting
+          </Button>
+        </DialogTrigger>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Request Meeting with {targetUserName}</DialogTitle>
@@ -208,13 +181,9 @@ export function RequestMeetingButton({
 
             <div className="space-y-2">
               <Label htmlFor="preferredDate">Preferred Date & Time *</Label>
-              <Input
-                id="preferredDate"
-                type="datetime-local"
-                value={preferredDate}
-                onChange={(e) => setPreferredDate(e.target.value)}
-                min={new Date().toISOString().slice(0, 16)}
-                required
+              <DateTimePicker
+                value={selectedDateTime}
+                onChange={setSelectedDateTime}
               />
             </div>
 

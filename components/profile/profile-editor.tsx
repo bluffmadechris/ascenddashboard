@@ -10,6 +10,9 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { AvatarUpload } from "@/components/profile/avatar-upload"
 import { SocialMediaEditor } from "@/components/profile/social-media-editor"
+import { useAuth } from "@/lib/auth-context"
+import { api } from "@/lib/api-client"
+import { Textarea } from "@/components/ui/textarea"
 
 type ProfileData = {
   name: string
@@ -20,115 +23,104 @@ type ProfileData = {
   twitter?: string
   linkedin?: string
   instagram?: string
+  contactVisible: boolean
 }
 
-export function ProfileEditor({ initialData }: { initialData: ProfileData }) {
-  const [profileData, setProfileData] = useState<ProfileData>(initialData)
-  const [isOpen, setIsOpen] = useState(false)
+export function ProfileEditor() {
+  const { user, updateUser } = useAuth()
+  const [isEditing, setIsEditing] = useState(false)
+  const [formData, setFormData] = useState<ProfileData>({
+    bio: user?.bio || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    contactVisible: user?.contactVisible || false
+  })
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setProfileData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleAvatarChange = (avatarUrl: string) => {
-    setProfileData((prev) => ({ ...prev, avatar: avatarUrl }))
-  }
-
-  const handleSocialChange = (platform: string, value: string) => {
-    setProfileData((prev) => ({ ...prev, [platform]: value }))
-  }
-
-  const handleSave = () => {
-    // In a real app, you would save to a database here
-    console.log("Saving profile data:", profileData)
-
-    // Simulate saving to database
-    setTimeout(() => {
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully.",
-      })
-      setIsOpen(false)
-    }, 500)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const response = await api.put(`/users/${user?.id}/profile`, formData)
+      updateUser(response.data)
+      setIsEditing(false)
+      toast.success("Profile updated successfully")
+    } catch (error) {
+      toast.error("Failed to update profile")
+    }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">Edit Profile</Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Edit Profile</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="mx-auto mb-4">
-            <AvatarUpload currentAvatar={profileData.avatar} onAvatarChange={handleAvatarChange} />
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold">Profile</h2>
+        <Button onClick={() => setIsEditing(!isEditing)}>
+          {isEditing ? "Cancel" : "Edit Profile"}
+        </Button>
+      </div>
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="name" className="text-right">
-              Name
-            </Label>
-            <Input id="name" name="name" value={profileData.name} onChange={handleChange} className="col-span-3" />
-          </div>
+      <AvatarUpload
+        currentUrl={user?.avatarUrl}
+        onUpload={async (url) => {
+          try {
+            await api.put(`/users/${user?.id}/avatar`, { avatarUrl: url })
+            updateUser({ ...user, avatarUrl: url })
+            toast.success("Profile picture updated")
+          } catch (error) {
+            toast.error("Failed to update profile picture")
+          }
+        }}
+        disabled={!isEditing}
+      />
 
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="email" className="text-right">
-              Email
-            </Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={profileData.email}
-              onChange={handleChange}
-              className="col-span-3"
-            />
-          </div>
-
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="phone" className="text-right">
-              Phone
-            </Label>
-            <Input
-              id="phone"
-              name="phone"
-              type="tel"
-              value={profileData.phone}
-              onChange={handleChange}
-              className="col-span-3"
-            />
-          </div>
-
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="bio" className="text-right">
-              Bio
-            </Label>
-            <Input id="bio" name="bio" value={profileData.bio} onChange={handleChange} className="col-span-3" />
-          </div>
-
-          <div className="mt-2">
-            <Label className="mb-2 block">Social Media</Label>
-            <SocialMediaEditor
-              socialLinks={{
-                twitter: profileData.twitter || "",
-                linkedin: profileData.linkedin || "",
-                instagram: profileData.instagram || "",
-              }}
-              onChange={handleSocialChange}
-            />
-          </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Bio</label>
+          <Textarea
+            value={formData.bio}
+            onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
+            disabled={!isEditing}
+            placeholder="Tell us about yourself..."
+          />
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => setIsOpen(false)}>
-            Cancel
+        <div>
+          <label className="block text-sm font-medium mb-1">Email</label>
+          <Input
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            disabled={!isEditing}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Phone</label>
+          <Input
+            type="tel"
+            value={formData.phone}
+            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+            disabled={!isEditing}
+          />
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="contactVisible"
+            checked={formData.contactVisible}
+            onChange={(e) => setFormData(prev => ({ ...prev, contactVisible: e.target.checked }))}
+            disabled={!isEditing}
+          />
+          <label htmlFor="contactVisible">Make contact information visible</label>
+        </div>
+
+        <SocialMediaEditor disabled={!isEditing} />
+
+        {isEditing && (
+          <Button type="submit" className="w-full">
+            Save Changes
           </Button>
-          <Button onClick={handleSave}>Save Changes</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        )}
+      </form>
+    </div>
   )
 }
