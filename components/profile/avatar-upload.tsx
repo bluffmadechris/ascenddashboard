@@ -6,6 +6,8 @@ import { useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, Loader2 } from "lucide-react"
 import { getInitials } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
+import { useToast } from "@/components/ui/use-toast"
 
 export function AvatarUpload({
   currentAvatar,
@@ -18,6 +20,8 @@ export function AvatarUpload({
 }) {
   const [isHovering, setIsHovering] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const { user } = useAuth()
+  const { toast } = useToast()
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -25,34 +29,58 @@ export function AvatarUpload({
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file')
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file",
+        variant: "destructive"
+      })
       return
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB')
+      toast({
+        title: "File too large",
+        description: "File size must be less than 5MB",
+        variant: "destructive"
+      })
       return
     }
 
     setIsUploading(true)
 
     try {
-      // Convert file to data URL for immediate display
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        const dataUrl = event.target?.result as string
-        onAvatarChange(dataUrl)
-        setIsUploading(false)
+      // Create form data
+      const formData = new FormData()
+      formData.append('avatar', file)
+
+      // Upload to S3 through our API
+      const response = await fetch(`/api/users/${user?.id}/avatar`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to upload profile picture')
       }
-      reader.onerror = () => {
-        alert('Error reading file')
-        setIsUploading(false)
-      }
-      reader.readAsDataURL(file)
+
+      // Update avatar with the signed URL from the response
+      onAvatarChange(data.data.user.avatar_url)
+      toast({
+        title: "Success",
+        description: "Profile picture updated successfully"
+      })
     } catch (error) {
       console.error('Error uploading avatar:', error)
-      alert('Error uploading image')
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error uploading image",
+        variant: "destructive"
+      })
+    } finally {
       setIsUploading(false)
     }
   }

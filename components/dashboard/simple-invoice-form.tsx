@@ -16,9 +16,7 @@ import { v4 as uuidv4 } from "@/lib/uuid"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-// Import the data persistence utility
-import { loadData, saveData } from "@/lib/data-persistence"
+import { apiClient } from "@/lib/api-client"
 
 type InvoiceItem = {
   id: string
@@ -46,7 +44,7 @@ export function SimpleInvoiceForm({
   const [invoiceName, setInvoiceName] = useState("")
   const [selectedClient, setSelectedClient] = useState(clientId || "")
   const [selectedClientName, setSelectedClientName] = useState(clientName || "")
-  const [initialStatus, setInitialStatus] = useState("new")
+  const [initialStatus, setInitialStatus] = useState("draft")
 
   // Items and calculations
   const [items, setItems] = useState<InvoiceItem[]>([{ id: uuidv4(), description: "", quantity: 1, amount: 0 }])
@@ -116,32 +114,33 @@ export function SimpleInvoiceForm({
       return
     }
 
-    // Generate a payrun ID
-    const payrunId = `PR-${Math.floor(Math.random() * 10000)
-      .toString()
-      .padStart(4, "0")}`
+    // Generate a unique invoice number
+    const invoiceNumber = `INV-${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`
 
-    // Create invoice object
-    const invoice = {
-      id: payrunId,
-      name: invoiceName,
-      clientId: selectedClient || "custom-client",
-      clientName: selectedClientName || "Custom Client",
-      date: invoiceDate,
-      items,
-      total: items.reduce((sum, item) => sum + item.amount, 0),
-      status: initialStatus, // Use the selected status
-      createdBy: user?.id || "",
-      createdByName: user?.name || "Unknown User",
-      createdAt: new Date(),
-    }
+    try {
+      // Create invoice data for the API
+      const invoiceData = {
+        client_id: selectedClient,
+        invoice_number: invoiceNumber,
+        amount: total,
+        currency: "USD",
+        status: initialStatus,
+        issue_date: invoiceDate.toISOString().split('T')[0],
+        due_date: new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from issue
+        description: invoiceName,
+        items: items.map(item => ({
+          description: item.description,
+          quantity: item.quantity,
+          amount: item.amount
+        }))
+      }
 
-    // In a real app, you would save this to a database
-    // For now, we'll simulate an API call with a timeout
-    setTimeout(() => {
-      // Add to localStorage for demo purposes
-      const existingInvoices = loadData("invoices", [])
-      saveData("invoices", [...existingInvoices, invoice])
+      // Send to API
+      const response = await apiClient.createInvoice(invoiceData)
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to create invoice')
+      }
 
       setIsLoading(false)
       setOpen(false)
@@ -155,211 +154,150 @@ export function SimpleInvoiceForm({
       setInvoiceName("")
       setSelectedClient(clientId || "")
       setSelectedClientName(clientName || "")
-      setInitialStatus("new")
+      setInitialStatus("draft")
       setItems([{ id: uuidv4(), description: "", quantity: 1, amount: 0 }])
 
       // Call the callback if provided
       if (onInvoiceCreated) {
         onInvoiceCreated()
       }
-    }, 1000)
+    } catch (error) {
+      console.error('Error creating invoice:', error)
+      setIsLoading(false)
+      toast({
+        title: "Error creating invoice",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          New Invoice
-        </Button>
+      <DialogTrigger asChild>
+        <Button variant="outline">Create Invoice</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Create New Invoice</DialogTitle>
+          <DialogTitle>Create New Invoice</DialogTitle>
         </DialogHeader>
-
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="invoice-date">Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !invoiceDate && "text-muted-foreground",
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {invoiceDate ? format(invoiceDate, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={invoiceDate}
-                      onSelect={(date) => date && setInvoiceDate(date)}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="invoice-name">Invoice Name</Label>
-                <Input
-                  id="invoice-name"
-                  value={invoiceName}
-                  onChange={(e) => setInvoiceName(e.target.value)}
-                  placeholder="e.g., Monthly Services"
-                  required
-                />
-              </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="invoiceName">Invoice Name</Label>
+              <Input
+                id="invoiceName"
+                value={invoiceName}
+                onChange={(e) => setInvoiceName(e.target.value)}
+                placeholder="Enter invoice name"
+              />
             </div>
-
-            {!clientId && (
-              <div className="space-y-2">
-                <Label htmlFor="client">Client</Label>
-                <Select
-                  value={selectedClient}
-                  onValueChange={(value) => {
-                    setSelectedClient(value)
-                    const clientMap: Record<string, string> = {
-                      capri: "Capri",
-                      "piper-rockelle": "Piper Rockelle",
-                      paryeet: "Paryeet",
-                      "lacy-vods": "Lacy VODS",
-                      "custom-client": "Custom Client",
-                    }
-                    setSelectedClientName(clientMap[value] || "")
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="capri">Capri</SelectItem>
-                    <SelectItem value="piper-rockelle">Piper Rockelle</SelectItem>
-                    <SelectItem value="paryeet">Paryeet</SelectItem>
-                    <SelectItem value="lacy-vods">Lacy VODS</SelectItem>
-                    <SelectItem value="custom-client">Custom Client</SelectItem>
-                  </SelectContent>
-                </Select>
-                {selectedClient === "custom-client" && (
-                  <div className="mt-2">
-                    <Input
-                      placeholder="Enter client name"
-                      value={selectedClientName}
-                      onChange={(e) => setSelectedClientName(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isOwner && (
-              <div className="space-y-2">
-                <Label htmlFor="status">Initial Status</Label>
-                <Select value={initialStatus} onValueChange={setInitialStatus}>
-                  <SelectTrigger id="status">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
-                    <SelectItem value="paid">Paid</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn("w-full justify-start text-left font-normal", !invoiceDate && "text-muted-foreground")}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {invoiceDate ? format(invoiceDate, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={invoiceDate} onSelect={(date) => date && setInvoiceDate(date)} />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
-          {/* Items */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <Label>Invoice Items</Label>
+          <div className="space-y-2">
+            <Label>Initial Status</Label>
+            <Select value={initialStatus} onValueChange={setInitialStatus}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <Label>Items</Label>
               <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="h-4 w-4 mr-1" /> Add Item
+                <Plus className="h-4 w-4 mr-1" />
+                Add Item
               </Button>
             </div>
-
-            <div className="space-y-3">
-              {items.map((item, index) => (
-                <div key={item.id} className="grid grid-cols-10 gap-2 items-start">
-                  <div className="col-span-5">
-                    <Input
-                      placeholder="Item description"
-                      value={item.description}
-                      onChange={(e) => {
-                        const newItems = [...items]
-                        newItems[index].description = e.target.value
-                        setItems(newItems)
-                      }}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Qty"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => {
-                        const qty = Number.parseInt(e.target.value) || 0
-                        const newItems = [...items]
-                        // Store the unit price (amount per single item)
-                        const unitPrice = item.quantity > 0 ? item.amount / item.quantity : item.amount
-                        // Update quantity
-                        newItems[index].quantity = qty
-                        // Calculate new total amount based on quantity * unit price
-                        newItems[index].amount = qty * unitPrice
-                        setItems(newItems)
-                      }}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Input
-                      type="number"
-                      placeholder="Amount"
-                      min="0"
-                      step="0.01"
-                      value={item.amount}
-                      onChange={(e) => {
-                        const amount = Number.parseFloat(e.target.value) || 0
-                        const newItems = [...items]
-                        newItems[index].amount = amount
-                        setItems(newItems)
-                      }}
-                      className="pl-6 relative"
-                    />
-                    <span className="absolute translate-y-[-30px] translate-x-2">$</span>
-                  </div>
-                  <div className="col-span-1 flex justify-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeItem(item.id)}
-                      className="h-10 w-10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Remove item</span>
-                    </Button>
-                  </div>
+            {items.map((item, index) => (
+              <div key={item.id} className="grid grid-cols-[1fr,auto,auto,auto] gap-2 items-end">
+                <div>
+                  <Label htmlFor={`description-${index}`}>Description</Label>
+                  <Input
+                    id={`description-${index}`}
+                    value={item.description}
+                    onChange={(e) =>
+                      setItems(
+                        items.map((i) => (i.id === item.id ? { ...i, description: e.target.value } : i)),
+                      )
+                    }
+                  />
                 </div>
-              ))}
-            </div>
+                <div>
+                  <Label htmlFor={`quantity-${index}`}>Quantity</Label>
+                  <Input
+                    id={`quantity-${index}`}
+                    type="number"
+                    min="1"
+                    value={item.quantity}
+                    onChange={(e) =>
+                      setItems(
+                        items.map((i) =>
+                          i.id === item.id ? { ...i, quantity: parseInt(e.target.value) || 0 } : i,
+                        ),
+                      )
+                    }
+                    className="w-24"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`amount-${index}`}>Amount</Label>
+                  <Input
+                    id={`amount-${index}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={item.amount}
+                    onChange={(e) =>
+                      setItems(
+                        items.map((i) =>
+                          i.id === item.id ? { ...i, amount: parseFloat(e.target.value) || 0 } : i,
+                        ),
+                      )
+                    }
+                    className="w-24"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeItem(item.id)}
+                  className="mb-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
           </div>
 
-          {/* Total */}
-          <div className="flex justify-end">
-            <div className="w-1/3">
-              <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                <span>Total:</span>
-                <span>${items.reduce((sum, item) => sum + (item.amount || 0), 0).toFixed(2)}</span>
-              </div>
-            </div>
+          <div className="flex justify-between items-center font-medium">
+            <span>Total Amount:</span>
+            <span>${total.toFixed(2)}</span>
           </div>
 
           <DialogFooter>
