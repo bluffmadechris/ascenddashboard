@@ -18,6 +18,7 @@ import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { Button } from "@/components/ui/button"
 import { TeamProfileEditor } from "@/components/dashboard/team-profile-editor"
 import { SendNotificationForm } from "@/components/dashboard/send-notification"
+import { ProfitStatsManager } from "@/components/dashboard/profit-stats-manager"
 
 export default function OwnerPanelPage() {
   const { user } = useAuth()
@@ -129,8 +130,6 @@ export default function OwnerPanelPage() {
     setActiveTab("roles")
     router.push("/owner-panel?tab=roles", { scroll: false })
   }
-
-
 
   return (
     <div className="space-y-6">
@@ -314,6 +313,10 @@ export default function OwnerPanelPage() {
         </TabsContent>
 
       </Tabs>
+
+      <div className="grid gap-6">
+        <ProfitStatsManager />
+      </div>
     </div>
   )
 }
