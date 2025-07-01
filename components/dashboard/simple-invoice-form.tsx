@@ -94,16 +94,6 @@ export function SimpleInvoiceForm({
       return
     }
 
-    if (!selectedClient && !selectedClientName) {
-      toast({
-        title: "Missing client",
-        description: "Please select a client for this invoice.",
-        variant: "destructive",
-      })
-      setIsLoading(false)
-      return
-    }
-
     if (items.some((item) => !item.description || item.quantity <= 0)) {
       toast({
         title: "Invalid items",
@@ -120,7 +110,7 @@ export function SimpleInvoiceForm({
     try {
       // Create invoice data for the API
       const invoiceData = {
-        client_id: selectedClient,
+        client_id: selectedClient || null, // Make sure it's null if no client selected
         invoice_number: invoiceNumber,
         amount: total,
         currency: "USD",
