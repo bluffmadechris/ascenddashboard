@@ -399,7 +399,7 @@ export default function ClientPage({ params }: { params: { clientId: string } })
                   </CardHeader>
                   <CardContent>
                     <div className={`text-2xl font-bold ${totalProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                      ${totalProfit.toFixed(2)}
+                      ${typeof totalProfit === 'number' ? totalProfit.toFixed(2) : '0.00'}
                     </div>
                     <p className="text-xs text-muted-foreground">After pending invoices</p>
                   </CardContent>

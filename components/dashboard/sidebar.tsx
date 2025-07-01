@@ -51,13 +51,6 @@ export function DashboardSidebar() {
                 <LayoutDashboard className="sidebar-item-icon" />
                 Dashboard
               </Link>
-              {/* Only show contracts to owners and specific roles */}
-              {(user?.role === "owner" || user?.role === "editor") && (
-                <Link href="/contracts" className={`sidebar-item ${isActive("/contracts") ? "active" : ""}`}>
-                  <FileSignature className="sidebar-item-icon" />
-                  Contracts
-                </Link>
-              )}
 
               <Link href="/invoices" className={`sidebar-item ${isActive("/invoices") ? "active" : ""}`}>
                 <Receipt className="sidebar-item-icon" />
@@ -99,12 +92,6 @@ export function DashboardSidebar() {
               <Link href="/calendar" className={`sidebar-item ${isActive("/calendar") ? "active" : ""}`}>
                 <Calendar className="sidebar-item-icon" />
                 Calendar
-              </Link>
-
-              {/* Availability link for all users */}
-              <Link href="/availability" className={`sidebar-item ${isActive("/availability") ? "active" : ""}`}>
-                <ListChecks className="sidebar-item-icon" />
-                Availability
               </Link>
 
               {/* Meeting requests link for all users */}

@@ -101,7 +101,9 @@ export function DashboardStats() {
   }, [user, users, isOwner])
 
   // Calculate profit
-  const totalProfit = totalRevenue - totalInvoicesAmount
+  const totalProfit = typeof totalRevenue === 'number' && typeof totalInvoicesAmount === 'number'
+    ? totalRevenue - totalInvoicesAmount
+    : 0
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -121,14 +123,8 @@ export function DashboardStats() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {typeof totalRevenue === 'number'
-                ? formatCurrency(totalRevenue)
-                : formatCurrency(parseFloat(totalRevenue))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Total revenue across all clients
-            </p>
+            <div className="text-2xl font-bold">{formatCurrency(totalRevenue || 0)}</div>
+            <p className="text-xs text-muted-foreground">+{revenueChange}% from last month</p>
           </CardContent>
         </Card>
         <Card>
@@ -137,14 +133,8 @@ export function DashboardStats() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {typeof totalInvoicesAmount === 'number'
-                ? formatCurrency(totalInvoicesAmount)
-                : formatCurrency(parseFloat(totalInvoicesAmount))}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Total amount from all invoices
-            </p>
+            <div className="text-2xl font-bold">{formatCurrency(totalInvoicesAmount || 0)}</div>
+            <p className="text-xs text-muted-foreground">+{invoicesChange}% from last month</p>
           </CardContent>
         </Card>
         <Card>
@@ -153,11 +143,7 @@ export function DashboardStats() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {typeof totalProfit === 'number'
-                ? formatCurrency(totalProfit)
-                : formatCurrency(parseFloat(totalProfit))}
-            </div>
+            <div className="text-2xl font-bold">{formatCurrency(totalProfit)}</div>
             <p className="text-xs text-muted-foreground">Revenue minus invoices</p>
           </CardContent>
         </Card>

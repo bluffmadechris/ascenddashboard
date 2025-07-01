@@ -245,29 +245,34 @@ export function IntegratedAvailabilityCalendar({
         // Create new entry with default times
         updatedDates.push({
           date: dateStr,
-          available: true, // Default to available when adding new dates
+          available: false, // Default to unavailable when clicking for the first time
           startTime: availability.defaultStartTime,
           endTime: availability.defaultEndTime,
         })
       }
 
-      // Save updated availability
-      const updatedAvailability: Availability = {
+      // Sort dates chronologically
+      updatedDates.sort((a, b) => a.date.localeCompare(b.date))
+
+      // Update availability
+      const updatedAvailability = {
         ...availability,
         dates: updatedDates,
       }
 
+      // Save to storage
       saveUserAvailability(updatedAvailability)
       setAvailability(updatedAvailability)
-      setRefreshKey((prev) => prev + 1)
 
+      // Notify parent of change
       if (onAvailabilityChange) {
         onAvailabilityChange()
       }
 
+      // Show toast
       toast({
         title: "Availability updated",
-        description: `${format(date, "MMMM d, yyyy")} is now ${isDayAvailable(date) ? "unavailable" : "available"}`,
+        description: `${format(date, "MMMM d, yyyy")} marked as ${isDayAvailable(date) ? "unavailable" : "available"}`,
       })
     } catch (error) {
       console.error("Error toggling availability:", error)
@@ -279,101 +284,28 @@ export function IntegratedAvailabilityCalendar({
     }
   }
 
-  // Update availability for a date range
-  const updateDateRangeAvailability = (
-    startDate: Date,
-    endDate: Date,
-    isAvailable: boolean,
-    startTime: string,
-    endTime: string,
-    note?: string,
-    recurrence?: RecurrenceRule,
-  ) => {
-    if (!user || !availability) return
+  // Handle date click
+  const handleDateClick = (date: Date) => {
+    // Toggle availability when clicking the day
+    toggleDayAvailability(date)
+  }
 
-    try {
-      // Ensure start date is before end date
-      const start = isBefore(startDate, endDate) ? startDate : endDate
-      const end = isAfter(endDate, startDate) ? endDate : startDate
+  // Get availability status class
+  const getAvailabilityStatusClass = (date: Date): string => {
+    const isAvailable = isDayAvailable(date)
+    const hasUnavailable = hasUnavailableTimeSlots(date)
+    const isSelected = selectedDate ? isSameDay(date, selectedDate) : false
+    const isInRange = isInSelectedRange(date)
 
-      // Get all dates in the range
-      const datesInRange = eachDay({ start, end })
-
-      // Update availability for each date
-      const updatedDates = [...availability.dates]
-      const updatedSlots = [...availability.unavailableSlots]
-
-      datesInRange.forEach((date) => {
-        const dateStr = format(date, "yyyy-MM-dd")
-        const existingIndex = updatedDates.findIndex((d) => d.date === dateStr)
-
-        // Update or add date availability
-        if (existingIndex !== -1) {
-          updatedDates[existingIndex] = {
-            ...updatedDates[existingIndex],
-            available: isAvailable,
-            startTime,
-            endTime,
-          }
-        } else {
-          updatedDates.push({
-            date: dateStr,
-            available: isAvailable,
-            startTime,
-            endTime,
-          })
-        }
-
-        // Remove existing slots for this date
-        const filteredSlots = updatedSlots.filter((slot) => slot.date !== dateStr)
-        updatedSlots.length = 0
-        updatedSlots.push(...filteredSlots)
-
-        // Add new slot if there's a note
-        if (note) {
-          updatedSlots.push({
-            id: `${dateStr}-${Date.now()}`,
-            date: dateStr,
-            startTime,
-            endTime,
-            title: note,
-            recurring: recurrence,
-          })
-        }
-      })
-
-      // Save updated availability
-      const updatedAvailability: Availability = {
-        ...availability,
-        dates: updatedDates,
-        unavailableSlots: updatedSlots,
-      }
-
-      saveUserAvailability(updatedAvailability)
-      setAvailability(updatedAvailability)
-      setRefreshKey((prev) => prev + 1)
-
-      if (onAvailabilityChange) {
-        onAvailabilityChange()
-      }
-
-      toast({
-        title: "Date range updated",
-        description: `Updated availability for ${format(start, "MMM d")} to ${format(end, "MMM d, yyyy")}`,
-      })
-
-      // Reset range selection
-      setRangeSelectionMode(false)
-      setRangeStartDate(null)
-      setRangeEndDate(null)
-    } catch (error) {
-      console.error("Error updating date range:", error)
-      toast({
-        title: "Error",
-        description: "Failed to update availability for date range",
-        variant: "destructive",
-      })
-    }
+    return cn(
+      "relative h-full min-h-[100px] p-2 hover:bg-accent/50 cursor-pointer",
+      isToday(date) && "border-2 border-primary",
+      !isSameMonth(date, currentDate) && "text-muted-foreground bg-muted/50",
+      isSelected && "bg-accent",
+      isInRange && "bg-accent/50",
+      isAvailable ? "bg-green-100/50" : "bg-red-100/50",
+      hasUnavailable && "ring-1 ring-yellow-500",
+    )
   }
 
   // Open availability detail modal
@@ -487,30 +419,6 @@ export function IntegratedAvailabilityCalendar({
     }
   }
 
-  // Handle date click for range selection or regular click
-  const handleDateClick = (date: Date) => {
-    if (rangeSelectionMode) {
-      // If we're in range selection mode
-      if (!rangeStartDate) {
-        // First click - set start date
-        setRangeStartDate(date)
-        toast({
-          title: "Start date selected",
-          description: `Selected ${format(date, "MMMM d, yyyy")} as start date. Now select an end date.`,
-        })
-      } else {
-        // Second click - set end date and open detail modal
-        setRangeEndDate(date)
-        openDetailModal(rangeStartDate, date)
-      }
-    } else {
-      // Regular date click behavior
-      if (onDateClick) {
-        onDateClick(date)
-      }
-    }
-  }
-
   // Handle double click to open time slot manager
   const handleDoubleClick = (date: Date) => {
     setSelectedDate(date)
@@ -540,200 +448,221 @@ export function IntegratedAvailabilityCalendar({
     })
   }
 
-  // Get availability status class
-  const getAvailabilityStatusClass = (date: Date): string => {
-    // If date is in selected range, highlight it
-    if (isInSelectedRange(date)) {
-      return "bg-blue-100 dark:bg-blue-900/20 hover:bg-blue-200 dark:hover:bg-blue-900/30"
-    }
+  // Update availability for a date range
+  const updateDateRangeAvailability = (
+    startDate: Date,
+    endDate: Date,
+    isAvailable: boolean,
+    startTime: string,
+    endTime: string,
+    note?: string,
+    recurrence?: RecurrenceRule,
+  ) => {
+    if (!user || !availability) return
 
-    // If date is the range start, highlight it differently
-    if (rangeStartDate && isSameDay(date, rangeStartDate)) {
-      return "bg-blue-200 dark:bg-blue-900/30 hover:bg-blue-300 dark:hover:bg-blue-900/40"
-    }
+    try {
+      // Ensure start date is before end date
+      const start = isBefore(startDate, endDate) ? startDate : endDate
+      const end = isAfter(endDate, startDate) ? endDate : startDate
 
-    // Regular availability status
-    if (!isDayAvailable(date)) {
-      return "bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30"
-    }
+      // Get all dates in the range
+      const datesInRange = eachDay({ start, end })
 
-    if (hasUnavailableTimeSlots(date)) {
-      return "bg-amber-100 dark:bg-amber-900/20 hover:bg-amber-200 dark:hover:bg-amber-900/30"
-    }
+      // Update availability for each date
+      const updatedDates = [...availability.dates]
+      const updatedSlots = [...availability.unavailableSlots]
 
-    return "bg-green-100 dark:bg-green-900/20 hover:bg-green-200 dark:hover:bg-green-900/30"
+      datesInRange.forEach((date) => {
+        const dateStr = format(date, "yyyy-MM-dd")
+        const existingIndex = updatedDates.findIndex((d) => d.date === dateStr)
+
+        // Update or add date availability
+        if (existingIndex !== -1) {
+          updatedDates[existingIndex] = {
+            ...updatedDates[existingIndex],
+            available: isAvailable,
+            startTime,
+            endTime,
+          }
+        } else {
+          updatedDates.push({
+            date: dateStr,
+            available: isAvailable,
+            startTime,
+            endTime,
+          })
+        }
+
+        // Remove existing slots for this date
+        const filteredSlots = updatedSlots.filter((slot) => slot.date !== dateStr)
+        updatedSlots.length = 0
+        updatedSlots.push(...filteredSlots)
+
+        // Add new slot if there's a note
+        if (note) {
+          updatedSlots.push({
+            id: `${dateStr}-${Date.now()}`,
+            date: dateStr,
+            startTime,
+            endTime,
+            title: note,
+            recurring: recurrence,
+          })
+        }
+      })
+
+      // Save updated availability
+      const updatedAvailability: Availability = {
+        ...availability,
+        dates: updatedDates,
+        unavailableSlots: updatedSlots,
+      }
+
+      saveUserAvailability(updatedAvailability)
+      setAvailability(updatedAvailability)
+      setRefreshKey((prev) => prev + 1)
+
+      if (onAvailabilityChange) {
+        onAvailabilityChange()
+      }
+
+      toast({
+        title: "Date range updated",
+        description: `Updated availability for ${format(start, "MMM d")} to ${format(end, "MMM d, yyyy")}`,
+      })
+
+      // Reset range selection
+      setRangeSelectionMode(false)
+      setRangeStartDate(null)
+      setRangeEndDate(null)
+    } catch (error) {
+      console.error("Error updating date range:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update availability for date range",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Range Selection Toggle */}
-      <div className="flex justify-end mb-2">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm">Date Range Selection:</span>
-          <button
-            onClick={toggleRangeSelectionMode}
-            className={cn(
-              "px-3 py-1 text-xs font-medium rounded-full transition-colors",
-              rangeSelectionMode
-                ? "bg-blue-500 text-white hover:bg-blue-600"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600",
-            )}
-          >
-            {rangeSelectionMode ? "Enabled" : "Disabled"}
-          </button>
-        </div>
-      </div>
-
-      {/* Range Selection Instructions */}
-      {rangeSelectionMode && (
-        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-md p-2 mb-4">
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            {!rangeStartDate
-              ? "Click on a date to select the start date of your range"
-              : "Now click on another date to select the end date of your range"}
-          </p>
-        </div>
-      )}
-
-      {/* Calendar Header - Days of Week */}
-      <div className="grid grid-cols-7 bg-muted/20">
-        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-          <div key={day} className="p-3 text-center font-medium">
+    <div className="h-full overflow-auto">
+      <div className="grid grid-cols-7 gap-px bg-muted p-px">
+        {/* Weekday headers */}
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+          <div key={day} className="bg-card px-2 py-3 text-center text-sm font-medium">
             {day}
           </div>
         ))}
-      </div>
 
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 flex-1 overflow-hidden">
-        {/* Fill in days before the first of the month */}
-        {Array.from({ length: calendarDays[0]?.getDay() || 0 }).map((_, index) => (
-          <div key={`empty-start-${index}`} className="border-b border-r p-2 bg-muted/10"></div>
-        ))}
-
-        {/* Calendar Days */}
-        {calendarDays.map((day) => {
-          if (!isValid(day)) return null
-
-          const dayEvents = getEventsForDate(day)
-          const isCurrentDay = isToday(day)
-          const isCurrentMonth = isSameMonth(day, currentDate)
-          const isAvailable = isDayAvailable(day)
-          const hasTimeSlots = hasUnavailableTimeSlots(day)
-          const unavailableSlots = getUnavailableSlotsForDate(day)
-          const isInRange = isInSelectedRange(day)
-          const isRangeStart = rangeStartDate && isSameDay(day, rangeStartDate)
+        {/* Calendar grid */}
+        {calendarDays.map((date, dayIdx) => {
+          const dayEvents = getEventsForDate(date)
+          const dayAvailability = getAvailabilityDetailsForDate(date)
 
           return (
             <div
-              key={day.toString()}
-              className={cn(
-                "border-b border-r p-2 transition-colors overflow-hidden",
-                isCurrentDay ? "bg-blue-50 dark:bg-blue-900/20" : "",
-                !isCurrentMonth ? "bg-muted/10 text-muted-foreground" : "",
-                isCurrentMonth ? getAvailabilityStatusClass(day) : "",
-                "hover:bg-muted/20 cursor-pointer",
-                isInRange ? "ring-2 ring-inset ring-blue-500" : "",
-                isRangeStart ? "ring-2 ring-blue-600 ring-offset-2" : "",
-              )}
-              onClick={() => handleDateClick(day)}
-              onDoubleClick={() => handleDoubleClick(day)}
+              key={date.toString()}
+              className={getAvailabilityStatusClass(date)}
+              onClick={() => handleDateClick(date)}
             >
-              <div className="flex justify-between items-start">
-                <span
-                  className={cn(
-                    "inline-flex h-6 w-6 items-center justify-center rounded-full text-sm",
-                    isCurrentDay ? "bg-primary text-primary-foreground" : "",
-                    isRangeStart ? "bg-blue-500 text-white" : "",
-                  )}
-                >
-                  {format(day, "d")}
-                </span>
-                <div className="flex space-x-1">
-                  {hasTimeSlots && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge variant="outline" className="h-5 px-1">
-                            <Clock className="h-3 w-3 text-amber-500" />
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <div className="space-y-1 max-w-xs">
-                            <p className="font-medium">Unavailable Time Slots:</p>
-                            {unavailableSlots.map((slot) => (
-                              <div key={slot.id} className="text-xs">
-                                {slot.startTime} - {slot.endTime}
-                                {slot.title && <span className="ml-1">({slot.title})</span>}
-                              </div>
-                            ))}
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-
-                  {/* Enhanced Availability Indicator */}
-                  {!rangeSelectionMode && (
-                    <AvailabilityIndicator
-                      isAvailable={isAvailable}
-                      onToggle={() => toggleDayAvailability(day)}
-                      onDetailView={() => openDetailModal(day)}
-                      size="sm"
-                    />
-                  )}
-                </div>
+              <div className="flex justify-between">
+                <span className="text-sm">{format(date, "d")}</span>
+                {dayEvents.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">
+                    {dayEvents.length}
+                  </Badge>
+                )}
               </div>
 
-              {/* Events for this day */}
-              <div className="mt-1 space-y-1 max-h-[80px] overflow-y-auto">
-                {dayEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="text-xs p-1 rounded truncate cursor-pointer hover:bg-primary/10"
-                    style={{ backgroundColor: `${event.color}30` }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (onEventClick) onEventClick(event)
-                    }}
-                  >
-                    <div className="flex items-center">
-                      <div
-                        className="w-2 h-2 rounded-full mr-1 flex-shrink-0"
-                        style={{ backgroundColor: event.color }}
-                      ></div>
-                      <span className="truncate">{event.title}</span>
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">{formatTimeFromISO(event.start)}</div>
-                  </div>
+              {/* Events */}
+              <div className="mt-1">
+                {dayEvents.slice(0, 2).map((event) => (
+                  <TooltipProvider key={event.id}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className="mb-1 truncate rounded-sm bg-primary/10 px-1 py-0.5 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation() // Prevent triggering the day click
+                            if (onEventClick) onEventClick(event)
+                          }}
+                        >
+                          {event.title}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="font-medium">{event.title}</p>
+                        <p className="text-xs">
+                          {formatTimeFromISO(event.start)} - {formatTimeFromISO(event.end)}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ))}
+                {dayEvents.length > 2 && (
+                  <div className="text-xs text-muted-foreground">+{dayEvents.length - 2} more</div>
+                )}
+              </div>
+
+              {/* Availability indicator */}
+              <div className="absolute bottom-1 right-1">
+                <AvailabilityIndicator
+                  isAvailable={dayAvailability.isAvailable}
+                  hasUnavailableSlots={hasUnavailableTimeSlots(date)}
+                  onClick={(e) => {
+                    e.stopPropagation() // Prevent triggering the day click
+                    openDetailModal(date)
+                  }}
+                />
               </div>
             </div>
           )
         })}
-
-        {/* Fill in days after the last day of the month */}
-        {Array.from({ length: 6 - (calendarDays[calendarDays.length - 1]?.getDay() || 0) }).map((_, index) => (
-          <div key={`empty-end-${index}`} className="border-b border-r p-2 bg-muted/10"></div>
-        ))}
       </div>
 
-      {/* Time Slot Manager Dialog */}
+      {/* Time slot manager dialog */}
       <Dialog open={showTimeSlotManager} onOpenChange={setShowTimeSlotManager}>
-        <DialogContent className="max-w-4xl">
-          <TimeSlotManager date={selectedDate || undefined} onClose={handleTimeSlotManagerClose} />
+        <DialogContent className="max-w-lg">
+          {selectedDate && (
+            <TimeSlotManager
+              date={selectedDate}
+              availability={availability}
+              onSave={(slots) => {
+                if (!availability) return
+
+                const updatedAvailability = {
+                  ...availability,
+                  unavailableSlots: [
+                    ...availability.unavailableSlots.filter(
+                      (slot) => slot.date !== format(selectedDate, "yyyy-MM-dd"),
+                    ),
+                    ...slots,
+                  ],
+                }
+
+                saveUserAvailability(updatedAvailability)
+                setAvailability(updatedAvailability)
+                setShowTimeSlotManager(false)
+
+                if (onAvailabilityChange) {
+                  onAvailabilityChange()
+                }
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Availability Detail Modal */}
+      {/* Availability detail modal */}
       <AvailabilityDetailModal
         open={showDetailModal}
         onOpenChange={setShowDetailModal}
         date={detailDate}
-        endDate={detailEndDate || undefined}
+        endDate={detailEndDate}
         isAvailable={detailIsAvailable}
-        defaultStartTime={detailStartTime}
-        defaultEndTime={detailEndTime}
+        startTime={detailStartTime}
+        endTime={detailEndTime}
         note={detailNote}
         recurrence={detailRecurrence}
         onSave={saveAvailabilityDetails}
