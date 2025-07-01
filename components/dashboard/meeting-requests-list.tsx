@@ -18,7 +18,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CalendarIcon, Check, Clock, X, Trash2, CalendarPlus2Icon as CalendarIcon2, AlertCircle } from "lucide-react"
+import { CalendarIcon, Check, Clock, X, Trash2, CalendarPlus, AlertCircle } from "lucide-react"
 import { format, parseISO, isValid, addHours, isBefore, isSameDay } from "date-fns"
 import { useAuth } from "@/lib/auth-context"
 import {
@@ -452,7 +452,7 @@ export function MeetingRequestsList() {
                             className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                             onClick={() => handleReschedule(request)}
                           >
-                            <CalendarIcon2 className="mr-2 h-4 w-4" />
+                            <CalendarIcon className="mr-2 h-4 w-4" />
                             Reschedule
                           </Button>
                         </>
