@@ -167,7 +167,9 @@ export function cleanupOldData(): void {
       "invoices",
       "simple-invoices",
       "invoice-items",
-      "invoice-drafts"
+      "invoice-drafts",
+      "notifications",
+      "notification-settings"
     ]
 
     migratedKeys.forEach(key => {
