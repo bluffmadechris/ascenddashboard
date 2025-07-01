@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/lib/auth-context"
 import { NotificationsProvider } from "@/lib/notifications-context"
 import { DisplayTitleProvider } from "@/lib/display-title-context"
+import { RolesProvider } from "@/lib/roles-context"
+import { OrgHierarchyProvider } from "@/lib/org-hierarchy-context"
 import { cleanupOldData } from "@/lib/data-persistence"
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -16,14 +18,18 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
     return (
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <AuthProvider>
-                <NotificationsProvider>
-                    <DisplayTitleProvider>
-                        {children}
-                        <Toaster />
-                    </DisplayTitleProvider>
-                </NotificationsProvider>
-            </AuthProvider>
+            <RolesProvider>
+                <DisplayTitleProvider>
+                    <AuthProvider>
+                        <OrgHierarchyProvider>
+                            <NotificationsProvider>
+                                {children}
+                                <Toaster />
+                            </NotificationsProvider>
+                        </OrgHierarchyProvider>
+                    </AuthProvider>
+                </DisplayTitleProvider>
+            </RolesProvider>
         </ThemeProvider>
     )
 } 
