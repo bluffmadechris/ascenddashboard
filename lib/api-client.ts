@@ -397,6 +397,15 @@ class ApiClient {
     return this.post('/notifications/broadcast', notificationData);
   }
 
+  async createNotification(notificationData: {
+    type: string;
+    title: string;
+    message: string;
+    data?: any;
+  }): Promise<ApiResponse> {
+    return this.post('/notifications', notificationData);
+  }
+
   async deleteNotification(id: number): Promise<ApiResponse> {
     return this.delete(`/notifications/${id}`);
   }

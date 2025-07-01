@@ -26,12 +26,8 @@ type InvoiceItem = {
 }
 
 export function SimpleInvoiceForm({
-  clientId,
-  clientName,
   onInvoiceCreated,
 }: {
-  clientId?: string
-  clientName?: string
   onInvoiceCreated?: () => void
 }) {
   const { toast } = useToast()
@@ -42,8 +38,6 @@ export function SimpleInvoiceForm({
   // Invoice details
   const [invoiceDate, setInvoiceDate] = useState<Date>(new Date())
   const [invoiceName, setInvoiceName] = useState("")
-  const [selectedClient, setSelectedClient] = useState(clientId || "")
-  const [selectedClientName, setSelectedClientName] = useState(clientName || "")
   const [initialStatus, setInitialStatus] = useState("draft")
 
   // Items and calculations
@@ -117,7 +111,6 @@ export function SimpleInvoiceForm({
     try {
       // Create invoice data for the API
       const invoiceData = {
-        client_id: selectedClient || null, // Make sure it's null if no client selected
         invoice_number: invoiceNumber,
         amount: total,
         currency: "USD",
@@ -139,6 +132,23 @@ export function SimpleInvoiceForm({
         throw new Error(response.message || 'Failed to create invoice')
       }
 
+      // Send notifications if invoice is approved or paid
+      if (initialStatus === "approved") {
+        await apiClient.createNotification({
+          type: "INVOICE_APPROVED",
+          title: "Invoice Approved",
+          message: `Invoice ${invoiceNumber} has been approved.`,
+          data: { invoiceId: response.data.id }
+        })
+      } else if (initialStatus === "paid") {
+        await apiClient.createNotification({
+          type: "INVOICE_PAID",
+          title: "Invoice Paid",
+          message: `Invoice ${invoiceNumber} has been marked as paid.`,
+          data: { invoiceId: response.data.id }
+        })
+      }
+
       setIsLoading(false)
       setOpen(false)
 
@@ -149,8 +159,6 @@ export function SimpleInvoiceForm({
 
       // Reset form
       setInvoiceName("")
-      setSelectedClient(clientId || "")
-      setSelectedClientName(clientName || "")
       setInitialStatus("draft")
       setItems([{ id: uuidv4(), description: "", quantity: 1, amount: 0 }])
 

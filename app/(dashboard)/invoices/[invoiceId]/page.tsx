@@ -10,6 +10,8 @@ import { ArrowLeft, Download, CheckCircle, XCircle, AlertTriangle, Clock } from 
 import { toast } from "@/components/ui/use-toast"
 import { generateInvoicePDF } from "@/lib/pdf-generator"
 import { apiClient } from "@/lib/api-client"
+import { useAuth } from "@/lib/auth-context"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Sample invoice data - in a real app, this would come from an API
 const invoiceData = {
@@ -93,6 +95,8 @@ export default function InvoiceDetailsPage() {
   const [invoice, setInvoice] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { user } = useAuth()
+  const isOwner = user?.role === "owner"
 
   const invoiceId = params?.invoiceId as string
 
@@ -171,6 +175,57 @@ export default function InvoiceDetailsPage() {
     }
   }
 
+  // Function to update invoice status
+  const updateInvoiceStatus = async (newStatus: string) => {
+    if (!isOwner) {
+      toast({
+        title: "Permission Denied",
+        description: "Only owners can change invoice status.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      const response = await apiClient.updateInvoice(invoiceId, {
+        ...invoice,
+        status: newStatus
+      })
+
+      if (response.success) {
+        setInvoice({ ...invoice, status: newStatus })
+
+        // Send notification for status change
+        if (newStatus === "approved" || newStatus === "paid") {
+          await apiClient.createNotification({
+            type: "INVOICE_STATUS_CHANGE",
+            title: `Invoice ${invoice.invoice_number} ${newStatus}`,
+            message: `Invoice ${invoice.invoice_number} has been marked as ${newStatus}`,
+            userId: invoice.created_by,
+            metadata: {
+              invoiceId: invoiceId,
+              status: newStatus
+            }
+          })
+        }
+
+        toast({
+          title: "Status Updated",
+          description: `Invoice status has been updated to ${newStatus}.`,
+        })
+      } else {
+        throw new Error(response.message || "Failed to update status")
+      }
+    } catch (err) {
+      console.error("Error updating invoice status:", err)
+      toast({
+        title: "Error",
+        description: "Failed to update invoice status. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -243,9 +298,26 @@ export default function InvoiceDetailsPage() {
                   <CardTitle className="text-2xl">Invoice {invoice.invoice_number}</CardTitle>
                   <CardDescription>Issued on {new Date(invoice.issue_date).toLocaleDateString()}</CardDescription>
                 </div>
-                <div className="flex items-center gap-2">
-                  {renderStatusIcon(invoice.status)}
-                  {renderStatusBadge(invoice.status)}
+                <div className="flex items-center gap-4">
+                  {isOwner && (
+                    <Select
+                      value={invoice.status}
+                      onValueChange={updateInvoiceStatus}
+                    >
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="new">New</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {renderStatusIcon(invoice.status)}
+                    {renderStatusBadge(invoice.status)}
+                  </div>
                 </div>
               </div>
             </CardHeader>

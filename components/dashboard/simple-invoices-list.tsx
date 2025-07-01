@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Download, FileText, Trash2, CheckCircle, Clock, CreditCard } from "lucide-react"
+import { Download, FileText, Trash2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
 import Link from "next/link"
@@ -22,8 +22,6 @@ type SimpleInvoice = {
   id: string
   invoice_number: string
   description: string
-  client_id: string
-  client_name: string
   issue_date: string
   items: InvoiceItem[]
   amount: number
@@ -39,11 +37,9 @@ type FilterOptions = {
 }
 
 export function SimpleInvoicesList({
-  clientId,
   limit,
   filterBy,
 }: {
-  clientId?: string
   limit?: number
   filterBy?: FilterOptions
 }) {
@@ -73,11 +69,6 @@ export function SimpleInvoicesList({
         }
 
         let allInvoices = response.data.invoices as SimpleInvoice[]
-
-        // Apply filters
-        if (clientId) {
-          allInvoices = allInvoices.filter(invoice => invoice.client_id === clientId)
-        }
 
         // Non-owners only see their own invoices
         if (!isOwner) {
@@ -119,7 +110,7 @@ export function SimpleInvoicesList({
     }, 30000) // Poll every 30 seconds
 
     return () => clearInterval(intervalId)
-  }, [initialized, user?.id, isOwner, clientId, filterBy, toast])
+  }, [initialized, user?.id, isOwner, filterBy, toast])
 
   const handleDeleteInvoice = async (invoiceId: string, invoice: SimpleInvoice) => {
     // Only owners and invoice creators can delete
@@ -133,7 +124,7 @@ export function SimpleInvoicesList({
     }
 
     // Show confirmation dialog
-    if (confirm(`Are you sure you want to delete invoice "${invoice.description}" for ${invoice.client_name}?\n\nThis action cannot be undone.`)) {
+    if (confirm(`Are you sure you want to delete invoice "${invoice.description}"?\n\nThis action cannot be undone.`)) {
       try {
         const response = await apiClient.deleteInvoice(parseInt(invoiceId))
 
@@ -172,7 +163,6 @@ export function SimpleInvoicesList({
         <TableHeader>
           <TableRow>
             <TableHead>Invoice</TableHead>
-            <TableHead>Client</TableHead>
             <TableHead>Date</TableHead>
             <TableHead>Amount</TableHead>
             <TableHead>Status</TableHead>
@@ -190,7 +180,6 @@ export function SimpleInvoicesList({
                   </Link>
                 </div>
               </TableCell>
-              <TableCell>{invoice.client_name}</TableCell>
               <TableCell>{new Date(invoice.issue_date).toLocaleDateString()}</TableCell>
               <TableCell>
                 ${typeof invoice.amount === 'number'
@@ -202,7 +191,7 @@ export function SimpleInvoicesList({
                   variant={
                     invoice.status === "paid"
                       ? "success"
-                      : invoice.status === "pending"
+                      : invoice.status === "approved"
                         ? "warning"
                         : "secondary"
                   }
@@ -236,7 +225,7 @@ export function SimpleInvoicesList({
           ))}
           {displayInvoices.length === 0 && (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                 No invoices found
               </TableCell>
             </TableRow>

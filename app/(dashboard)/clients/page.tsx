@@ -28,11 +28,6 @@ export default function ClientsPage() {
   const [formData, setFormData] = useState({
     name: "",
     industry: "",
-    status: "Active",
-    projects: "0",
-    totalSpent: "$0.00",
-    contactPerson: "",
-    contactEmail: "",
     logo: "",
   })
 
@@ -70,11 +65,6 @@ export default function ClientsPage() {
       name: formData.name,
       logo: formData.logo || `/placeholder.svg?key=${formData.name.toLowerCase()}`,
       industry: formData.industry,
-      status: formData.status,
-      projects: Number.parseInt(formData.projects, 10) || 0,
-      totalSpent: formData.totalSpent,
-      contactPerson: formData.contactPerson,
-      contactEmail: formData.contactEmail,
     }
 
     // Add the client to the list
@@ -90,11 +80,6 @@ export default function ClientsPage() {
     setFormData({
       name: "",
       industry: "",
-      status: "Active",
-      projects: "0",
-      totalSpent: "$0.00",
-      contactPerson: "",
-      contactEmail: "",
       logo: "",
     })
     setOpen(false)
@@ -168,75 +153,6 @@ export default function ClientsPage() {
             </div>
 
             <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="status">Status</Label>
-              <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="projects">Projects</Label>
-                <Input
-                  type="number"
-                  id="projects"
-                  name="projects"
-                  placeholder="0"
-                  value={formData.projects}
-                  onChange={handleInputChange}
-                  min="0"
-                />
-              </div>
-
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="totalSpent">Total Spent</Label>
-                <Input
-                  type="text"
-                  id="totalSpent"
-                  name="totalSpent"
-                  placeholder="$0.00"
-                  value={formData.totalSpent}
-                  onChange={handleInputChange}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="contactPerson">Contact Person*</Label>
-                <Input
-                  type="text"
-                  id="contactPerson"
-                  name="contactPerson"
-                  placeholder="Enter contact name"
-                  value={formData.contactPerson}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-
-              <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="contactEmail">Contact Email*</Label>
-                <Input
-                  type="email"
-                  id="contactEmail"
-                  name="contactEmail"
-                  placeholder="Enter contact email"
-                  value={formData.contactEmail}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid w-full items-center gap-1.5">
               <Label htmlFor="logo">Logo URL</Label>
               <Input
                 type="text"
@@ -250,9 +166,6 @@ export default function ClientsPage() {
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
               <Button type="submit">Add Client</Button>
             </DialogFooter>
           </form>

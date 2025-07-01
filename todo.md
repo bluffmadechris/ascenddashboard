@@ -1,3 +1,42 @@
+# Recent Updates & Changes (March 2024)
+
+## UI/UX Simplification Changes
+
+### Invoice System Updates ✅
+- Removed "Select Client" option from invoice section
+- Modified team member addition flow to remove client access functionality
+- Updated invoice status permissions:
+  - Only owners can now set invoice status (new, approved, paid)
+  - Regular users and creatives can no longer modify status
+- Added notifications for invoice status changes (triggers when marked as approved or paid)
+
+### Profile Page Improvements 🔄
+- Fixed profile picture upload functionality
+- Implemented working bio section
+- Added functional social media links
+- Removed non-functional contact hidden tab
+- Updated meeting request system:
+  - Restricted to employees only (owners can directly schedule)
+  - Fixed request meeting functionality
+
+### Calendar & Availability Simplification 📅
+- Removed standalone Availability tab
+- Simplified calendar availability system:
+  - Removed "Recurrence" section
+  - Implemented straightforward day selection for time off
+  - Streamlined UI for marking days as unavailable
+
+### Client Management Cleanup 👥
+- Streamlined clients tab by removing:
+  - Projects section
+  - Status indicators
+  - Total spent tracking
+  - Contact person field
+
+### General Cleanup 🧹
+- Removed Contracts page entirely
+- Removed notification preferences from settings page
+
 # API Server Setup Guide
 
 This guide will help you set up and run the API server for the Ascend Media Dashboard.

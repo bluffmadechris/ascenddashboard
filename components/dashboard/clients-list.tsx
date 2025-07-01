@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Link from "next/link"
@@ -26,11 +25,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ImageIcon, UserRound, Briefcase } from "lucide-react"
 
 // Default clients data
 const defaultClients = [
@@ -39,44 +36,24 @@ const defaultClients = [
     name: "Capri",
     logo: "/placeholder.svg?key=capri",
     industry: "Entertainment",
-    status: "Active",
-    projects: 4,
-    totalSpent: "$32,500.00",
-    contactPerson: "Alex Johnson",
-    contactEmail: "alex@capri.com",
   },
   {
     id: "piper-rockelle",
     name: "Piper Rockelle",
     logo: "/placeholder.svg?key=piper",
     industry: "Content Creation",
-    status: "Active",
-    projects: 3,
-    totalSpent: "$28,000.00",
-    contactPerson: "Sarah Miller",
-    contactEmail: "sarah@piperrockelle.com",
   },
   {
     id: "paryeet",
     name: "Paryeet",
     logo: "/placeholder.svg?key=paryeet",
     industry: "Digital Media",
-    status: "Active",
-    projects: 2,
-    totalSpent: "$15,500.00",
-    contactPerson: "Michael Brown",
-    contactEmail: "michael@paryeet.com",
   },
   {
     id: "lacy-vods",
     name: "Lacy VODS",
     logo: "/placeholder.svg?key=lacy",
     industry: "Video Production",
-    status: "Active",
-    projects: 3,
-    totalSpent: "$22,000.00",
-    contactPerson: "Emily Chen",
-    contactEmail: "emily@lacyvods.com",
   },
 ]
 
@@ -90,22 +67,14 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [formData, setFormData] = useState({
     logo: "",
-    status: "",
-    projects: 0,
-    totalSpent: "",
-    contactPerson: "",
-    contactEmail: "",
+    industry: "",
   })
 
   const handleEditClient = (client) => {
     setClientToEdit(client)
     setFormData({
       logo: client.logo,
-      status: client.status,
-      projects: client.projects,
-      totalSpent: client.totalSpent.replace("$", "").replace(",", ""),
-      contactPerson: client.contactPerson,
-      contactEmail: client.contactEmail,
+      industry: client.industry,
     })
     setIsEditDialogOpen(true)
   }
@@ -121,21 +90,11 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
 
   const handleSaveClient = () => {
     if (clientToEdit) {
-      // Format the total spent value
-      const formattedTotalSpent = `$${Number.parseFloat(formData.totalSpent).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      })}`
-
       // Create updated client data
       const updatedClient = {
         ...clientToEdit,
         logo: formData.logo,
-        status: formData.status,
-        projects: Number(formData.projects),
-        totalSpent: formattedTotalSpent,
-        contactPerson: formData.contactPerson,
-        contactEmail: formData.contactEmail,
+        industry: formData.industry,
       }
 
       // Update clients list
@@ -201,11 +160,6 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
             <TableRow>
               <TableHead>Client</TableHead>
               <TableHead>Industry</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Projects</TableHead>
-              <TableHead>Total Spent</TableHead>
-              <TableHead>Contact Person</TableHead>
-              <TableHead>Contact Email</TableHead>
               <TableHead className="w-[150px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -226,13 +180,6 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
                   </div>
                 </TableCell>
                 <TableCell>{client.industry}</TableCell>
-                <TableCell>
-                  <Badge variant={client.status === "Active" ? "default" : "secondary"}>{client.status}</Badge>
-                </TableCell>
-                <TableCell>{client.projects}</TableCell>
-                <TableCell>{client.totalSpent}</TableCell>
-                <TableCell>{client.contactPerson}</TableCell>
-                <TableCell>{client.contactEmail}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" asChild>
@@ -263,22 +210,29 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
                 </TableCell>
               </TableRow>
             ))}
+            {clients.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                  No clients found
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
 
-      {/* Confirmation Dialog */}
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure you want to delete this client?</AlertDialogTitle>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove {clientToDelete?.name} and all associated data. This action cannot be undone.
+              This will permanently delete {clientToDelete?.name}. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={cancelDelete}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700 text-white">
+            <AlertDialogAction onClick={confirmDelete} className="bg-red-500 hover:bg-red-600">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -287,115 +241,40 @@ export function ClientsList({ initialClients = [], onClientDelete = null }) {
 
       {/* Edit Client Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit Client: {clientToEdit?.name}</DialogTitle>
-            <DialogDescription>Make changes to the client information. Click save when you're done.</DialogDescription>
+            <DialogTitle>Edit Client</DialogTitle>
+            <DialogDescription>Make changes to the client information below.</DialogDescription>
           </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="industry">Industry</Label>
+              <Select value={formData.industry} onValueChange={(value) => handleSelectChange("industry", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an industry" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Entertainment">Entertainment</SelectItem>
+                  <SelectItem value="Content Creation">Content Creation</SelectItem>
+                  <SelectItem value="Digital Media">Digital Media</SelectItem>
+                  <SelectItem value="Video Production">Video Production</SelectItem>
+                  <SelectItem value="Social Media">Social Media</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Tabs defaultValue="profile" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="profile" className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4" />
-                <span>Profile</span>
-              </TabsTrigger>
-              <TabsTrigger value="details" className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4" />
-                <span>Details</span>
-              </TabsTrigger>
-              <TabsTrigger value="contact" className="flex items-center gap-2">
-                <UserRound className="h-4 w-4" />
-                <span>Contact</span>
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="profile" className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="logo">Profile Picture URL</Label>
-                <Input
-                  id="logo"
-                  name="logo"
-                  value={formData.logo}
-                  onChange={handleInputChange}
-                  placeholder="Enter logo URL"
-                />
-              </div>
-              <div className="pt-4">
-                <img
-                  src={formData.logo || "/placeholder.svg"}
-                  alt="Client logo preview"
-                  className="mx-auto h-24 w-24 rounded-full object-cover"
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="details" className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="status">Client Status</Label>
-                <Select value={formData.status} onValueChange={(value) => handleSelectChange("status", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Inactive">Inactive</SelectItem>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="projects">Number of Projects</Label>
-                <Input
-                  id="projects"
-                  name="projects"
-                  type="number"
-                  min="0"
-                  value={formData.projects}
-                  onChange={handleInputChange}
-                  placeholder="Enter number of projects"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="totalSpent">Total Spent</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2">$</span>
-                  <Input
-                    id="totalSpent"
-                    name="totalSpent"
-                    className="pl-7"
-                    value={formData.totalSpent}
-                    onChange={handleInputChange}
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="contact" className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="contactPerson">Contact Person</Label>
-                <Input
-                  id="contactPerson"
-                  name="contactPerson"
-                  value={formData.contactPerson}
-                  onChange={handleInputChange}
-                  placeholder="Enter contact person name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contactEmail">Contact Email</Label>
-                <Input
-                  id="contactEmail"
-                  name="contactEmail"
-                  type="email"
-                  value={formData.contactEmail}
-                  onChange={handleInputChange}
-                  placeholder="Enter contact email"
-                />
-              </div>
-            </TabsContent>
-          </Tabs>
-
+            <div className="grid w-full items-center gap-1.5">
+              <Label htmlFor="logo">Logo URL</Label>
+              <Input
+                id="logo"
+                name="logo"
+                value={formData.logo}
+                onChange={handleInputChange}
+                placeholder="Enter logo URL"
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel

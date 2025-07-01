@@ -3,9 +3,7 @@
 import { useState, useEffect } from "react"
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from "date-fns"
 import { cn } from "@/lib/utils"
-import type { Availability, UnavailableTimeSlot } from "@/lib/calendar-utils"
-import { Clock } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import type { Availability } from "@/lib/calendar-utils"
 
 interface AvailabilityCalendarProps {
   month: Date
@@ -17,7 +15,6 @@ interface AvailabilityCalendarProps {
 export function AvailabilityCalendar({ month, availability, selectedDays, onSelectDay }: AvailabilityCalendarProps) {
   const [days, setDays] = useState<Date[]>([])
   const [weekdays] = useState(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"])
-  const [daySlots, setDaySlots] = useState<Record<string, UnavailableTimeSlot[]>>({})
 
   // Generate days for the month
   useEffect(() => {
@@ -26,22 +23,6 @@ export function AvailabilityCalendar({ month, availability, selectedDays, onSele
     const daysInMonth = eachDayOfInterval({ start, end })
     setDays(daysInMonth)
   }, [month])
-
-  // Group unavailable slots by day
-  useEffect(() => {
-    if (!availability) return
-
-    const slots: Record<string, UnavailableTimeSlot[]> = {}
-
-    availability.unavailableSlots.forEach((slot) => {
-      if (!slots[slot.date]) {
-        slots[slot.date] = []
-      }
-      slots[slot.date].push(slot)
-    })
-
-    setDaySlots(slots)
-  }, [availability])
 
   // Check if a day is available
   const isDayAvailable = (day: Date): boolean => {
@@ -68,27 +49,15 @@ export function AvailabilityCalendar({ month, availability, selectedDays, onSele
   const getDayClassNames = (day: Date) => {
     const isAvailable = isDayAvailable(day)
     const isSelected = isDaySelected(day)
-    const dateStr = format(day, "yyyy-MM-dd")
-    const hasUnavailableSlots = daySlots[dateStr] && daySlots[dateStr].length > 0
 
     return cn(
-      "flex flex-col items-center justify-start h-10 w-10 rounded-full text-sm font-medium relative",
+      "flex items-center justify-center h-10 w-10 rounded-full text-sm font-medium",
       isToday(day) && "border border-gray-300",
       !isSameMonth(day, month) && "text-gray-400",
       isSameMonth(day, month) && !isAvailable && !isSelected && "bg-red-100 hover:bg-red-200 text-red-800",
-      isSameMonth(day, month) &&
-        isAvailable &&
-        !hasUnavailableSlots &&
-        !isSelected &&
-        "bg-green-100 hover:bg-green-200 text-green-800",
-      isSameMonth(day, month) &&
-        isAvailable &&
-        hasUnavailableSlots &&
-        !isSelected &&
-        "bg-amber-100 hover:bg-amber-200 text-amber-800",
+      isSameMonth(day, month) && isAvailable && !isSelected && "bg-green-100 hover:bg-green-200 text-green-800",
       isSelected && "ring-2 ring-offset-2 ring-blue-500",
-      isSelected && isAvailable && !hasUnavailableSlots && "bg-green-200",
-      isSelected && isAvailable && hasUnavailableSlots && "bg-amber-200",
+      isSelected && isAvailable && "bg-green-200",
       isSelected && !isAvailable && "bg-red-200",
     )
   }
@@ -111,40 +80,16 @@ export function AvailabilityCalendar({ month, availability, selectedDays, onSele
           ))}
 
         {/* Render days of the month */}
-        {days.map((day) => {
-          const dateStr = format(day, "yyyy-MM-dd")
-          const dayUnavailableSlots = daySlots[dateStr] || []
-
-          return (
-            <TooltipProvider key={day.toString()} delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button type="button" onClick={() => onSelectDay(day)} className={getDayClassNames(day)}>
-                    <span>{format(day, "d")}</span>
-                    {dayUnavailableSlots.length > 0 && (
-                      <span className="absolute bottom-0 right-0">
-                        <Clock className="h-3 w-3 text-amber-500" />
-                      </span>
-                    )}
-                  </button>
-                </TooltipTrigger>
-                {dayUnavailableSlots.length > 0 && (
-                  <TooltipContent side="bottom" className="p-2 max-w-[200px]">
-                    <div className="text-xs font-medium mb-1">Unavailable times:</div>
-                    <div className="space-y-1">
-                      {dayUnavailableSlots.map((slot, i) => (
-                        <div key={i} className="text-xs">
-                          {slot.startTime} - {slot.endTime}
-                          {slot.title && <span className="ml-1">({slot.title})</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
-          )
-        })}
+        {days.map((day) => (
+          <button
+            key={day.toString()}
+            type="button"
+            onClick={() => onSelectDay(day)}
+            className={getDayClassNames(day)}
+          >
+            {format(day, "d")}
+          </button>
+        ))}
       </div>
     </div>
   )
