@@ -54,6 +54,13 @@ export function SimpleInvoiceForm({
   const { user: authUser } = useAuth()
   const isOwner = authUser?.role === "owner"
 
+  // Set default status to draft for non-owners
+  useEffect(() => {
+    if (!isOwner) {
+      setInitialStatus("draft")
+    }
+  }, [isOwner])
+
   // Calculate total
   useEffect(() => {
     const newTotal = items.reduce((sum, item) => sum + item.amount, 0)
@@ -201,19 +208,21 @@ export function SimpleInvoiceForm({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label>Initial Status</Label>
-            <Select value={initialStatus} onValueChange={setInitialStatus}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {isOwner && (
+            <div className="space-y-2">
+              <Label>Initial Status</Label>
+              <Select value={initialStatus} onValueChange={setInitialStatus}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
