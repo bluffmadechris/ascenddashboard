@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Download, CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
 import { generateInvoicePDF } from "@/lib/pdf-generator"
+import { apiClient } from "@/lib/api-client"
 
 // Sample invoice data - in a real app, this would come from an API
 const invoiceData = {
@@ -96,18 +97,14 @@ export default function InvoiceDetailsPage() {
   const invoiceId = params?.invoiceId as string
 
   useEffect(() => {
-    // Simulate API call to fetch invoice details
     const fetchInvoice = async () => {
       setLoading(true)
       setError(null)
 
       try {
-        // Simulate network delay
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        // Check if invoice exists in our sample data
-        if (invoiceId && invoiceData[invoiceId]) {
-          setInvoice(invoiceData[invoiceId])
+        const response = await apiClient.getInvoice(invoiceId)
+        if (response.success && response.data?.invoice) {
+          setInvoice(response.data.invoice)
         } else {
           setError("Invoice not found")
           toast({
@@ -133,6 +130,14 @@ export default function InvoiceDetailsPage() {
       fetchInvoice()
     }
   }, [invoiceId])
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount)
+  }
 
   // Function to render status badge
   const renderStatusBadge = (status: string) => {
@@ -235,8 +240,8 @@ export default function InvoiceDetailsPage() {
             <CardHeader className="pb-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-2xl">Invoice {invoice.id}</CardTitle>
-                  <CardDescription>Issued on {invoice.date}</CardDescription>
+                  <CardTitle className="text-2xl">Invoice {invoice.invoice_number}</CardTitle>
+                  <CardDescription>Issued on {new Date(invoice.issue_date).toLocaleDateString()}</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   {renderStatusIcon(invoice.status)}
@@ -255,8 +260,8 @@ export default function InvoiceDetailsPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-1">To</h3>
-                  <p className="font-medium">{invoice.clientName}</p>
-                  <p>Client ID: {invoice.clientId}</p>
+                  <p className="font-medium">{invoice.client?.name || 'No Client'}</p>
+                  {invoice.client && <p>Client ID: {invoice.client.id}</p>}
                 </div>
               </div>
 
@@ -270,10 +275,7 @@ export default function InvoiceDetailsPage() {
                           Description
                         </th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          Hours
-                        </th>
-                        <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          Rate
+                          Quantity
                         </th>
                         <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Amount
@@ -281,33 +283,22 @@ export default function InvoiceDetailsPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-background divide-y divide-border">
-                      {invoice.items.map((item: any, index: number) => (
+                      {invoice.items?.map((item: any, index: number) => (
                         <tr key={index}>
                           <td className="px-4 py-3 text-sm">{item.description}</td>
-                          <td className="px-4 py-3 text-sm text-right">{item.hours}</td>
-                          <td className="px-4 py-3 text-sm text-right">{item.rate}</td>
-                          <td className="px-4 py-3 text-sm text-right">{item.amount}</td>
+                          <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
+                          <td className="px-4 py-3 text-sm text-right">{formatCurrency(item.amount)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={3} className="px-4 py-3 text-sm text-right font-medium">
-                          Subtotal
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">{invoice.subtotal}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan={3} className="px-4 py-3 text-sm text-right font-medium">
-                          Tax
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">{invoice.tax}</td>
-                      </tr>
-                      <tr className="bg-muted/50">
-                        <td colSpan={3} className="px-4 py-3 text-sm text-right font-bold">
+                        <td colSpan={2} className="px-4 py-3 text-sm text-right font-bold">
                           Total
                         </td>
-                        <td className="px-4 py-3 text-sm text-right font-bold">{invoice.total}</td>
+                        <td className="px-4 py-3 text-sm text-right font-bold">
+                          {formatCurrency(invoice.amount)}
+                        </td>
                       </tr>
                     </tfoot>
                   </table>
@@ -315,40 +306,28 @@ export default function InvoiceDetailsPage() {
               </div>
 
               {/* Status-specific information */}
-              {invoice.status === "approved" && (
+              {invoice.status === "approved" && invoice.approved_by && invoice.approved_date && (
                 <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-900/20 rounded-md p-4">
                   <div className="flex items-start">
                     <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 mr-2" />
                     <div>
                       <h4 className="font-medium text-green-800 dark:text-green-400">Invoice Approved</h4>
                       <p className="text-sm text-green-700 dark:text-green-500">
-                        This invoice was approved by {invoice.approvedBy} on {invoice.approvedDate}.
+                        This invoice was approved by {invoice.approved_by} on {new Date(invoice.approved_date).toLocaleDateString()}.
                       </p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {invoice.status === "rejected" && (
+              {invoice.status === "rejected" && invoice.rejection_reason && (
                 <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/20 rounded-md p-4">
                   <div className="flex items-start">
                     <XCircle className="h-5 w-5 text-red-500 mt-0.5 mr-2" />
                     <div>
                       <h4 className="font-medium text-red-800 dark:text-red-400">Invoice Rejected</h4>
-                      <p className="text-sm text-red-700 dark:text-red-500">{invoice.rejectionReason}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {invoice.status === "paid" && (
-                <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/20 rounded-md p-4">
-                  <div className="flex items-start">
-                    <CheckCircle className="h-5 w-5 text-blue-500 mt-0.5 mr-2" />
-                    <div>
-                      <h4 className="font-medium text-blue-800 dark:text-blue-400">Payment Received</h4>
-                      <p className="text-sm text-blue-700 dark:text-blue-500">
-                        Payment for this invoice was received on {invoice.paidDate}.
+                      <p className="text-sm text-red-700 dark:text-red-500">
+                        {invoice.rejection_reason}
                       </p>
                     </div>
                   </div>
@@ -362,7 +341,7 @@ export default function InvoiceDetailsPage() {
                     <div>
                       <h4 className="font-medium text-amber-800 dark:text-amber-400">Invoice Overdue</h4>
                       <p className="text-sm text-amber-700 dark:text-amber-500">
-                        This invoice was due on {invoice.dueDate} and is now overdue. The client has been notified.
+                        This invoice was due on {new Date(invoice.due_date).toLocaleDateString()} and is now overdue.
                       </p>
                     </div>
                   </div>

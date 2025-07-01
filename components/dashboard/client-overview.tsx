@@ -64,6 +64,14 @@ export function ClientOverview({ clientId }: ClientOverviewProps) {
         }
     }, [clientId])
 
+    // Format currency
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD'
+        }).format(amount)
+    }
+
     if (loading) {
         return <div>Loading...</div>
     }
@@ -76,7 +84,11 @@ export function ClientOverview({ clientId }: ClientOverviewProps) {
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+                    <div className="text-2xl font-bold">
+                        {typeof totalRevenue === 'number'
+                            ? formatCurrency(totalRevenue)
+                            : formatCurrency(parseFloat(totalRevenue))}
+                    </div>
                     <p className="text-xs text-muted-foreground">Total revenue from this client</p>
                 </CardContent>
             </Card>
@@ -87,7 +99,11 @@ export function ClientOverview({ clientId }: ClientOverviewProps) {
                     <FileText className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${totalInvoices.toFixed(2)}</div>
+                    <div className="text-2xl font-bold">
+                        {typeof totalInvoices === 'number'
+                            ? formatCurrency(totalInvoices)
+                            : formatCurrency(parseFloat(totalInvoices))}
+                    </div>
                     <p className="text-xs text-muted-foreground">Total from paid invoices</p>
                 </CardContent>
             </Card>
@@ -98,7 +114,11 @@ export function ClientOverview({ clientId }: ClientOverviewProps) {
                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">${totalProfit.toFixed(2)}</div>
+                    <div className="text-2xl font-bold">
+                        {typeof totalProfit === 'number'
+                            ? formatCurrency(totalProfit)
+                            : formatCurrency(parseFloat(totalProfit))}
+                    </div>
                     <p className="text-xs text-muted-foreground">Revenue minus invoices</p>
                 </CardContent>
             </Card>

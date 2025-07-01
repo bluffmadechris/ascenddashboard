@@ -20,6 +20,14 @@ type SimpleInvoice = {
   created_by_name: string
 }
 
+// Format currency
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(amount)
+}
+
 export function RecentInvoices() {
   const { user, isOwner } = useAuth()
   const [invoices, setInvoices] = useState<SimpleInvoice[]>([])
@@ -82,7 +90,11 @@ export function RecentInvoices() {
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-sm font-medium">${invoice.amount.toFixed(2)}</p>
+                    <p className="text-sm font-medium">
+                      {typeof invoice.amount === 'number'
+                        ? formatCurrency(invoice.amount)
+                        : formatCurrency(parseFloat(invoice.amount))}
+                    </p>
                     <p className="text-xs text-muted-foreground">{invoice.client_name || "No Client"}</p>
                   </div>
                   <Badge variant={invoice.status === "paid" ? "default" : "secondary"} className="capitalize">

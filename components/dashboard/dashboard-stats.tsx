@@ -103,6 +103,14 @@ export function DashboardStats() {
   // Calculate profit
   const totalProfit = totalRevenue - totalInvoicesAmount
 
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount)
+  }
+
   if (isOwner) {
     // Owners see all stats including financial data
     return (
@@ -113,7 +121,11 @@ export function DashboardStats() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              {typeof totalRevenue === 'number'
+                ? formatCurrency(totalRevenue)
+                : formatCurrency(parseFloat(totalRevenue))}
+            </div>
             <p className="text-xs text-muted-foreground">
               Total revenue across all clients
             </p>
@@ -125,7 +137,11 @@ export function DashboardStats() {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalInvoicesAmount.toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              {typeof totalInvoicesAmount === 'number'
+                ? formatCurrency(totalInvoicesAmount)
+                : formatCurrency(parseFloat(totalInvoicesAmount))}
+            </div>
             <p className="text-xs text-muted-foreground">
               Total amount from all invoices
             </p>
@@ -137,7 +153,11 @@ export function DashboardStats() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalProfit.toFixed(2)}</div>
+            <div className="text-2xl font-bold">
+              {typeof totalProfit === 'number'
+                ? formatCurrency(totalProfit)
+                : formatCurrency(parseFloat(totalProfit))}
+            </div>
             <p className="text-xs text-muted-foreground">Revenue minus invoices</p>
           </CardContent>
         </Card>

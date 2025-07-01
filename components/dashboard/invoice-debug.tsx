@@ -17,6 +17,14 @@ type SimpleInvoice = {
   created_by_name: string
 }
 
+// Format currency
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD'
+  }).format(amount)
+}
+
 export function InvoiceDebug() {
   const { user, isOwner } = useAuth()
   const [invoices, setInvoices] = useState<SimpleInvoice[]>([])
@@ -80,7 +88,9 @@ export function InvoiceDebug() {
                     <ul className="ml-4 list-disc">
                       {empInvoices.map((inv) => (
                         <li key={inv.id}>
-                          {inv.id}: {inv.description} - ${inv.amount.toFixed(2)} - {inv.status}
+                          {inv.id}: {inv.description} - {typeof inv.amount === 'number'
+                            ? formatCurrency(inv.amount)
+                            : formatCurrency(parseFloat(inv.amount))} - {inv.status}
                         </li>
                       ))}
                     </ul>
