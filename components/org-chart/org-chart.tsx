@@ -34,7 +34,7 @@ export function OrgChart({ nodes, onMoveNode }: OrgChartProps) {
   // Render a node and its children
   const renderNode = useCallback(
     (node: TeamMemberNode, level = 0, isLastChild = false) => {
-      const hasChildren = node.children.length > 0
+      const hasChildren = (node.children?.length ?? 0) > 0
       const expanded = isNodeExpanded(node.id)
 
       return (
@@ -77,7 +77,7 @@ export function OrgChart({ nodes, onMoveNode }: OrgChartProps) {
           {/* Children */}
           {hasChildren && expanded && (
             <div className="ml-6">
-              {node.children.map((child, index) => renderNode(child, level + 1, index === node.children.length - 1))}
+              {node.children?.map((child, index) => renderNode(child, level + 1, index === (node.children?.length ?? 0) - 1))}
             </div>
           )}
         </div>
