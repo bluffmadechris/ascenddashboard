@@ -43,7 +43,7 @@ export function DraggableTeamMember({
     type: "TEAM_MEMBER",
     item: { id: node.id, parentId: node.parentId },
     canDrag: !isRoot, // Root node cannot be dragged
-    collect: (monitor) => ({
+    collect: (monitor: any) => ({
       isDragging: monitor.isDragging(),
     }),
   })
@@ -69,7 +69,7 @@ export function DraggableTeamMember({
     drop: (item: { id: string; parentId: string | null }) => {
       onDrop(item.id, node.id, canAcceptChildren ? node.id : node.parentId)
     },
-    collect: (monitor) => ({
+    collect: (monitor: any) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),

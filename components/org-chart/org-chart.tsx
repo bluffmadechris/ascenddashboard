@@ -1,102 +1,101 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import api from "@/lib/api-client"
-import { toast } from "sonner"
-
-interface TeamMember {
-  id: string
-  name: string
-  role: string
-  avatarUrl?: string
-  managerId?: string
-}
+import { useState, useCallback } from "react"
+import { DndProvider } from "react-dnd"
+import { HTML5Backend } from "react-dnd-html5-backend"
+import type { TeamMemberNode } from "@/lib/org-hierarchy-types"
+import { DraggableTeamMember } from "./draggable-team-member"
+import { cn } from "@/lib/utils"
 
 interface OrgChartProps {
-  onMemberClick?: (member: TeamMember) => void
+  nodes: TeamMemberNode[]
+  onMoveNode: (dragId: string, hoverId: string, newParentId: string | null) => void
 }
 
-export function OrgChart({ onMemberClick }: OrgChartProps) {
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+export function OrgChart({ nodes, onMoveNode }: OrgChartProps) {
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({})
 
-  useEffect(() => {
-    const fetchTeamMembers = async () => {
-      try {
-        const response = await api.get("/users/team-members")
-        setTeamMembers(response.data as TeamMember[])
-        setIsLoading(false)
-      } catch (error) {
-        toast.error("Failed to fetch team members")
-        setIsLoading(false)
-      }
-    }
-    fetchTeamMembers()
+  // Toggle node expansion
+  const toggleNodeExpansion = useCallback((nodeId: string) => {
+    setExpandedNodes((prev) => ({
+      ...prev,
+      [nodeId]: !prev[nodeId],
+    }))
   }, [])
 
-  const buildHierarchy = (members: TeamMember[]) => {
-    const hierarchy: { [key: string]: TeamMember[] } = {}
-    const roots: TeamMember[] = []
+  // Check if a node is expanded
+  const isNodeExpanded = useCallback(
+    (nodeId: string) => {
+      return expandedNodes[nodeId] !== false // Default to expanded
+    },
+    [expandedNodes],
+  )
 
-    // Group members by their manager
-    members.forEach(member => {
-      if (!member.managerId) {
-        roots.push(member)
-      } else {
-        if (!hierarchy[member.managerId]) {
-          hierarchy[member.managerId] = []
-        }
-        hierarchy[member.managerId].push(member)
-      }
-    })
+  // Render a node and its children
+  const renderNode = useCallback(
+    (node: TeamMemberNode, level = 0, isLastChild = false) => {
+      const hasChildren = node.children.length > 0
+      const expanded = isNodeExpanded(node.id)
 
-    return { roots, hierarchy }
-  }
+      return (
+        <div key={node.id} className="relative">
+          <div className="flex items-start">
+            {/* Vertical line from parent */}
+            {level > 0 && (
+              <div
+                className={cn(
+                  "absolute border-l-2 border-dashed",
+                  isLastChild ? "border-border/30 h-8" : "border-border/30 h-full",
+                )}
+                style={{ left: `${(level - 1) * 24 + 12}px`, top: "-16px" }}
+              />
+            )}
 
-  const renderTeamMember = (member: TeamMember, level: number = 0) => {
-    const { hierarchy } = buildHierarchy(teamMembers)
-    const reports = hierarchy[member.id] || []
+            {/* Horizontal line to node */}
+            {level > 0 && (
+              <div
+                className="absolute border-t-2 border-dashed border-border/30"
+                style={{ left: `${(level - 1) * 24 + 12}px`, width: "24px", top: "24px" }}
+              />
+            )}
 
-    return (
-      <div key={member.id} style={{ marginLeft: `${level * 40}px` }}>
-        <div
-          className="flex items-center p-4 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50"
-          onClick={() => onMemberClick?.(member)}
-        >
-          {member.avatarUrl && (
-            <img
-              src={member.avatarUrl}
-              alt={member.name}
-              className="w-10 h-10 rounded-full mr-4"
-            />
-          )}
-          <div>
-            <h3 className="font-medium">{member.name}</h3>
-            <p className="text-sm text-gray-500">{member.role}</p>
+            {/* Indentation based on level */}
+            <div style={{ width: `${level * 48}px` }} className="flex-shrink-0" />
+
+            {/* The node itself */}
+            <div className="flex-1 mb-4">
+              <DraggableTeamMember
+                node={node}
+                onDrop={onMoveNode}
+                isRoot={level === 0}
+                isExpanded={expanded}
+                onToggleExpand={hasChildren ? () => toggleNodeExpansion(node.id) : undefined}
+              />
+            </div>
           </div>
+
+          {/* Children */}
+          {hasChildren && expanded && (
+            <div className="ml-6">
+              {node.children.map((child, index) => renderNode(child, level + 1, index === node.children.length - 1))}
+            </div>
+          )}
         </div>
-        {reports.map(report => renderTeamMember(report, level + 1))}
-      </div>
-    )
-  }
+      )
+    },
+    [isNodeExpanded, onMoveNode, toggleNodeExpansion],
+  )
 
-  if (isLoading) {
-    return <div>Loading...</div>
-  }
+  // Find the root node (no parent)
+  const rootNode = nodes.find((node) => node.parentId === null)
 
-  const { roots } = buildHierarchy(teamMembers)
+  if (!rootNode) {
+    return <div className="text-center p-8">No organization hierarchy found.</div>
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Team Organization</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {roots.map(root => renderTeamMember(root))}
-        </div>
-      </CardContent>
-    </Card>
+    <DndProvider backend={HTML5Backend}>
+      <div className="org-chart p-4 overflow-x-auto">{renderNode(rootNode)}</div>
+    </DndProvider>
   )
 }

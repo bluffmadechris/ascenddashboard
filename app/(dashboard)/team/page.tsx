@@ -19,12 +19,13 @@ import { Badge } from "@/components/ui/badge"
 import { TeamHierarchyDisplay } from "@/components/dashboard/team-hierarchy-display"
 import { TeamMembersList } from "@/components/dashboard/team-members-list"
 import { OrgChart } from "@/components/org-chart/org-chart"
+import { OrgChartGrid } from "@/components/org-chart/org-chart-grid"
 
 export default function TeamPage() {
   const { users } = useAuth()
   const { getDisplayTitle } = useDisplayTitle()
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedView, setSelectedView] = useState<"list" | "org">("list")
+  const [selectedView, setSelectedView] = useState<"list" | "org">("org")
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [visibilityStates, setVisibilityStates] = useState<Record<string, boolean>>({})
   const [filterRole, setFilterRole] = useState<string | null>(null)
@@ -224,10 +225,11 @@ export default function TeamPage() {
       {selectedView === "list" ? (
         <TeamMembersList />
       ) : (
-        <OrgChart onMemberClick={(member) => {
+        <OrgChartGrid nodes={users as any} onMoveNode={(dragId, hoverId, newParentId) => {
           // Handle member click if needed
-          console.log("Member clicked:", member);
-        }} />
+          console.log("Member clicked:", dragId, hoverId, newParentId)
+        }}
+        />
       )}
     </div>
   )
