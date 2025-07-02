@@ -12,14 +12,13 @@ import { RolesList } from "@/components/dashboard/roles-list"
 import { CreateRoleForm } from "@/components/dashboard/create-role-form"
 import { EditRoleForm } from "@/components/dashboard/edit-role-form"
 
-import { useToast } from "@/components/ui/use-toast"
 import { Shield, Users, BarChart, UserPlus, Bell } from "lucide-react"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { Button } from "@/components/ui/button"
 import { TeamProfileEditor } from "@/components/dashboard/team-profile-editor"
 import { SendNotificationForm } from "@/components/dashboard/send-notification"
 import { ProfitStatsManager } from "@/components/dashboard/profit-stats-manager"
-import { api } from "@/lib/api-client"
+import api from "@/lib/api-client"
 import { toast } from "sonner"
 
 interface OwnerStats {
@@ -35,7 +34,6 @@ export default function OwnerPanelPage() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("dashboard")
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
@@ -80,12 +78,12 @@ export default function OwnerPanelPage() {
         const response = await api.get('/owner/stats')
         // Ensure all numeric values are properly converted to numbers
         const data = {
-          totalRevenue: Number(response.data.totalRevenue) || 0,
-          monthlyRevenue: Number(response.data.monthlyRevenue) || 0,
-          totalProfit: Number(response.data.totalProfit) || 0,
-          monthlyProfit: Number(response.data.monthlyProfit) || 0,
-          activeClients: Number(response.data.activeClients) || 0,
-          totalEmployees: Number(response.data.totalEmployees) || 0
+          totalRevenue: Number((response.data as any).totalRevenue) || 0,
+          monthlyRevenue: Number((response.data as any).monthlyRevenue) || 0,
+          totalProfit: Number((response.data as any).totalProfit) || 0,
+          monthlyProfit: Number((response.data as any).monthlyProfit) || 0,
+          activeClients: Number((response.data as any).activeClients) || 0,
+          totalEmployees: Number((response.data as any).totalEmployees) || 0
         }
         setStats(data)
         setIsLoading(false)
@@ -99,11 +97,7 @@ export default function OwnerPanelPage() {
 
   // Redirect if not owner or admin
   if (user?.role !== "owner" && user?.role !== "admin") {
-    toast({
-      title: "Access Denied",
-      description: "Only owners and admins can access this page.",
-      variant: "destructive",
-    })
+    toast.error("Access Denied: Only owners and admins can access this page.")
     router.push("/dashboard")
     return null
   }
@@ -116,19 +110,13 @@ export default function OwnerPanelPage() {
   }
 
   const handleCreateMemberSuccess = () => {
-    toast({
-      title: "Team Member Created",
-      description: "The team member has been created successfully.",
-    })
+    toast.success("Team Member Created successfully.")
     setActiveTab("team-members")
     router.push("/owner-panel?tab=team-members", { scroll: false })
   }
 
   const handleUpdateMemberSuccess = () => {
-    toast({
-      title: "Team Member Updated",
-      description: "The team member has been updated successfully.",
-    })
+    toast.success("Team Member Updated successfully.")
     setActiveTab("team-members")
     router.push("/owner-panel?tab=team-members", { scroll: false })
   }
@@ -151,19 +139,13 @@ export default function OwnerPanelPage() {
   }
 
   const handleCreateRoleSuccess = () => {
-    toast({
-      title: "Role Created",
-      description: "The role has been created successfully.",
-    })
+    toast.success("Role Created successfully.")
     setActiveTab("roles")
     router.push("/owner-panel?tab=roles", { scroll: false })
   }
 
   const handleUpdateRoleSuccess = () => {
-    toast({
-      title: "Role Updated",
-      description: "The role has been updated successfully.",
-    })
+    toast.success("Role Updated successfully.")
     setActiveTab("roles")
     router.push("/owner-panel?tab=roles", { scroll: false })
   }

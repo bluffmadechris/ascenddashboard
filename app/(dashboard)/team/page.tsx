@@ -50,7 +50,7 @@ export default function TeamPage() {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (user.bio && user.bio.toLowerCase().includes(searchQuery.toLowerCase()))
+      ("bio" in user && typeof (user as any).bio === "string" && (user as any).bio.toLowerCase().includes(searchQuery.toLowerCase()))
 
     const matchesRole = !filterRole || user.role === filterRole
 
@@ -150,9 +150,9 @@ export default function TeamPage() {
         onToggleVisibility={() => handleToggleVisibility(user.id)}
         roleColor={getRoleColor(category)}
         roleIcon={getRoleIcon(category)}
-        displayTitle={getDisplayTitle(user.id)}
+        displayTitle={getDisplayTitle(user.id, user.role)}
         actionButton={
-          selectedView === "calendar" ? (
+          selectedView === "list" ? (
             <Button
               variant="secondary"
               className="w-full"
@@ -168,22 +168,6 @@ export default function TeamPage() {
               className="w-full"
             />
           )
-        }
-        contactInfo={
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              {showContactInfo ? "Contact visible" : "Contact hidden"}
-            </span>
-            <Switch
-              checked={showContactInfo}
-              onCheckedChange={(checked) => {
-                handleToggleVisibility(user.id)
-              }}
-              onClick={(e) => e.stopPropagation()}
-              aria-label="Toggle contact information visibility"
-              className="scale-75 data-[state=checked]:bg-primary/80"
-            />
-          </div>
         }
       />
     )

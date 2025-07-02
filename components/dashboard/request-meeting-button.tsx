@@ -19,10 +19,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle, Loader2, Plus } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { useToast } from "@/components/ui/use-toast"
 import { generateId } from "@/lib/uuid"
 import { loadData, saveData } from "@/lib/data-persistence"
-import { api } from "@/lib/api-client"
+import api from "@/lib/api-client"
 import { toast } from "sonner"
 import { DateTimePicker } from "../ui/date-time-picker"
 
@@ -57,7 +56,6 @@ export function RequestMeetingButton({
   className
 }: RequestMeetingButtonProps) {
   const { user, users } = useAuth()
-  const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [subject, setSubject] = useState("")
   const [description, setDescription] = useState("")
@@ -182,8 +180,9 @@ export function RequestMeetingButton({
             <div className="space-y-2">
               <Label htmlFor="preferredDate">Preferred Date & Time *</Label>
               <DateTimePicker
-                value={selectedDateTime}
-                onChange={setSelectedDateTime}
+                date={selectedDateTime ?? undefined}
+                setDate={(d) => setSelectedDateTime(d ?? null)}
+                required
               />
             </div>
 

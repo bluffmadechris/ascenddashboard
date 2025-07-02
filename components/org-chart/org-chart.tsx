@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { api } from "@/lib/api-client"
+import api from "@/lib/api-client"
 import { toast } from "sonner"
 
 interface TeamMember {
@@ -25,7 +25,7 @@ export function OrgChart({ onMemberClick }: OrgChartProps) {
     const fetchTeamMembers = async () => {
       try {
         const response = await api.get("/users/team-members")
-        setTeamMembers(response.data)
+        setTeamMembers(response.data as TeamMember[])
         setIsLoading(false)
       } catch (error) {
         toast.error("Failed to fetch team members")
