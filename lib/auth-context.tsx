@@ -77,24 +77,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const healthCheck = await apiClient.healthCheck()
         setIsApiConnected(healthCheck.success)
 
-        if (healthCheck.success) {
-          // API is available, try to get current user if token exists
-          const token = TokenManager.getToken()
-          if (token) {
-            const userResponse = await apiClient.getCurrentUser()
-            if (userResponse.success && userResponse.data?.user) {
-              setUser(userResponse.data.user)
+        // Try to get current user if token exists, regardless of API status
+        const token = TokenManager.getToken()
+        if (token) {
+          try {
+            if (healthCheck.success) {
+              const userResponse = await apiClient.getCurrentUser()
+              if (userResponse.success && userResponse.data?.user) {
+                setUser(userResponse.data.user)
+              } else {
+                // Token is invalid or user not found, remove token and fall back to localStorage
+                TokenManager.removeToken()
+                const storedUser = loadData("user", null)
+                if (storedUser) {
+                  setUser(storedUser)
+                }
+              }
             } else {
-              // Token is invalid, remove it
-              TokenManager.removeToken()
+              // API not available, fall back to localStorage
+              const storedUser = loadData("user", null)
+              if (storedUser) {
+                setUser(storedUser)
+              }
             }
-          }
-        } else {
-          // API not available, fall back to localStorage
-          console.warn('API server not available, using local storage fallback')
-          const storedUser = loadData("user", null)
-          if (storedUser) {
-            setUser(storedUser)
+          } catch (error) {
+            console.error('Failed to get current user:', error)
+            // Error getting user, fall back to localStorage
+            const storedUser = loadData("user", null)
+            if (storedUser) {
+              setUser(storedUser)
+            }
           }
         }
       } catch (error) {
