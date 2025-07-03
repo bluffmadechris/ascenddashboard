@@ -225,11 +225,28 @@ export default function TeamPage() {
       {selectedView === "list" ? (
         <TeamMembersList />
       ) : (
-        <OrgChartGrid nodes={users as any} onMoveNode={(dragId, hoverId, newParentId) => {
-          // Handle member click if needed
-          console.log("Member clicked:", dragId, hoverId, newParentId)
-        }}
-        />
+        <div className="space-y-6">
+          {renderHierarchySection(
+            "Leadership",
+            owners,
+            <Crown className="h-6 w-6 text-purple-600" />,
+            "Company leadership and decision makers"
+          )}
+
+          {renderHierarchySection(
+            "Management",
+            management,
+            <Building className="h-6 w-6 text-blue-600" />,
+            "Department heads and team leaders"
+          )}
+
+          {renderHierarchySection(
+            "Creative Team",
+            creative,
+            <Palette className="h-6 w-6 text-amber-600" />,
+            "Content creators and specialists"
+          )}
+        </div>
       )}
     </div>
   )

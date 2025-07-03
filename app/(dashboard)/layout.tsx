@@ -64,6 +64,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <Sidebar className="border-r" collapsible="offcanvas">
             <SidebarHeader>
               <Link href="/dashboard" className="flex items-center gap-2 font-semibold text-primary">
+                <div className="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-primary-foreground font-bold text-sm">
+                  AM
+                </div>
                 <span className="text-xl">ASCEND MEDIA</span>
               </Link>
             </SidebarHeader>

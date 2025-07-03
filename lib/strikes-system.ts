@@ -11,12 +11,26 @@ export interface Strike {
   issuedBy: string
 }
 
+// Add strike appeal interface
+export interface StrikeAppeal {
+  id: string
+  strikeId: string
+  userId: string
+  reason: string
+  description: string
+  date: string
+  status: 'pending' | 'approved' | 'denied'
+  reviewedBy?: string
+  reviewedAt?: string
+  reviewNotes?: string
+}
+
 // Add notification types
 export interface StrikeNotification {
   id: string
   userId: string
   strikeId: string
-  type: 'new_strike' | 'strike_warning' | 'strike_critical' | 'strike_expired'
+  type: 'new_strike' | 'strike_warning' | 'strike_critical' | 'strike_expired' | 'appeal_submitted' | 'appeal_approved' | 'appeal_denied'
   message: string
   date: string
   read: boolean
@@ -31,6 +45,117 @@ export function getActiveStrikes(userId: string): Strike[] {
   return strikes.filter(
     (strike) => strike.userId === userId && new Date(strike.date) > sixtyDaysAgo
   )
+}
+
+// Create an appeal for a strike
+export function createStrikeAppeal(strikeId: string, userId: string, reason: string, description: string): StrikeAppeal | null {
+  try {
+    const appeals = loadData("strikeAppeals", []) as StrikeAppeal[]
+    
+    // Check if an appeal already exists for this strike
+    const existingAppeal = appeals.find(appeal => appeal.strikeId === strikeId)
+    if (existingAppeal) {
+      throw new Error("An appeal already exists for this strike")
+    }
+
+    const newAppeal: StrikeAppeal = {
+      id: generateId(),
+      strikeId,
+      userId,
+      reason,
+      description,
+      date: new Date().toISOString(),
+      status: 'pending'
+    }
+
+    appeals.push(newAppeal)
+    saveData("strikeAppeals", appeals)
+
+    // Create notification for appeal submission
+    createStrikeNotification(
+      userId,
+      strikeId,
+      'appeal_submitted',
+      `Your appeal for strike "${reason}" has been submitted and is under review.`
+    )
+
+    return newAppeal
+  } catch (error) {
+    console.error("Error creating strike appeal:", error)
+    return null
+  }
+}
+
+// Get appeals for a user
+export function getAppealsForUser(userId: string): StrikeAppeal[] {
+  try {
+    const appeals = loadData("strikeAppeals", []) as StrikeAppeal[]
+    return appeals.filter(appeal => appeal.userId === userId)
+  } catch (error) {
+    console.error("Error getting appeals for user:", error)
+    return []
+  }
+}
+
+// Get all pending appeals (for owners/admins)
+export function getPendingAppeals(): StrikeAppeal[] {
+  try {
+    const appeals = loadData("strikeAppeals", []) as StrikeAppeal[]
+    return appeals.filter(appeal => appeal.status === 'pending')
+  } catch (error) {
+    console.error("Error getting pending appeals:", error)
+    return []
+  }
+}
+
+// Review an appeal (approve/deny)
+export function reviewAppeal(appealId: string, status: 'approved' | 'denied', reviewedBy: string, reviewNotes?: string): boolean {
+  try {
+    const appeals = loadData("strikeAppeals", []) as StrikeAppeal[]
+    const appealIndex = appeals.findIndex(appeal => appeal.id === appealId)
+    
+    if (appealIndex === -1) {
+      throw new Error("Appeal not found")
+    }
+
+    const appeal = appeals[appealIndex]
+    appeal.status = status
+    appeal.reviewedBy = reviewedBy
+    appeal.reviewedAt = new Date().toISOString()
+    appeal.reviewNotes = reviewNotes
+
+    appeals[appealIndex] = appeal
+    saveData("strikeAppeals", appeals)
+
+    // If appeal is approved, remove the strike
+    if (status === 'approved') {
+      removeStrike(appeal.strikeId)
+    }
+
+    // Create notification for appeal result
+    createStrikeNotification(
+      appeal.userId,
+      appeal.strikeId,
+      status === 'approved' ? 'appeal_approved' : 'appeal_denied',
+      `Your appeal has been ${status}. ${reviewNotes ? `Review notes: ${reviewNotes}` : ''}`
+    )
+
+    return true
+  } catch (error) {
+    console.error("Error reviewing appeal:", error)
+    return false
+  }
+}
+
+// Check if a strike can be appealed
+export function canAppealStrike(strikeId: string): boolean {
+  try {
+    const appeals = loadData("strikeAppeals", []) as StrikeAppeal[]
+    return !appeals.some(appeal => appeal.strikeId === strikeId)
+  } catch (error) {
+    console.error("Error checking if strike can be appealed:", error)
+    return false
+  }
 }
 
 // Create a notification
