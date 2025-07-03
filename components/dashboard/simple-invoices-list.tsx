@@ -174,10 +174,10 @@ export function SimpleInvoicesList({
 
     try {
       await apiClient.deleteInvoice(parseInt(selectedInvoice.id))
-      toast.success("Invoice deleted successfully")
+      toast("Invoice deleted successfully")
       setInvoices(invoices.filter(inv => inv.id !== selectedInvoice.id))
     } catch (error) {
-      toast.error("Failed to delete invoice")
+      toast("Failed to delete invoice", { className: "text-destructive" })
     } finally {
       setDeleteDialogOpen(false)
       setSelectedInvoice(null)

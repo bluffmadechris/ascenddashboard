@@ -34,7 +34,33 @@ type Invoice = {
 /**
  * Generate and download a PDF for an invoice
  */
-export const generateInvoicePDF = async (invoice: Invoice): Promise<boolean> => {
+export const generateInvoicePDF = async (rawInvoice: any): Promise<boolean> => {
+  // Normalize different invoice shapes into a common format
+  const invoice: Invoice = {
+    id: rawInvoice.id ?? rawInvoice.invoice_number ?? 'N/A',
+    name: rawInvoice.name ?? rawInvoice.description ?? 'Invoice',
+    clientName: rawInvoice.clientName ?? rawInvoice.client_name ?? 'Unknown Client',
+    clientId: rawInvoice.clientId ?? String(rawInvoice.client_id ?? 'N/A'),
+    date: rawInvoice.date ?? rawInvoice.issue_date ?? new Date().toLocaleDateString(),
+    dueDate: rawInvoice.dueDate ?? rawInvoice.due_date ?? rawInvoice.issue_date ?? new Date().toLocaleDateString(),
+    status: rawInvoice.status ?? 'draft',
+    items: (rawInvoice.items ?? []).map((item: any) => ({
+      description: item.description,
+      quantity: item.quantity,
+      hours: item.hours,
+      rate: item.rate ?? String(item.amount / (item.quantity || item.hours || 1) ?? 0),
+      amount: typeof item.amount === 'number' ? item.amount.toFixed(2) : String(item.amount),
+    })),
+    subtotal: rawInvoice.subtotal ?? (typeof rawInvoice.amount === 'number' ? rawInvoice.amount.toFixed(2) : String(rawInvoice.amount)),
+    tax: rawInvoice.tax ?? '0.00',
+    total: rawInvoice.total ?? (typeof rawInvoice.amount === 'number' ? rawInvoice.amount.toFixed(2) : String(rawInvoice.amount)),
+    createdByName: rawInvoice.created_by_name ?? undefined,
+    paidDate: rawInvoice.paidDate ?? rawInvoice.paid_date ?? undefined,
+    approvedBy: rawInvoice.approvedBy ?? rawInvoice.approved_by ?? undefined,
+    approvedDate: rawInvoice.approvedDate ?? rawInvoice.approved_date ?? undefined,
+    rejectionReason: rawInvoice.rejectionReason ?? rawInvoice.rejection_reason ?? undefined,
+  } as Invoice;
+
   try {
     // Create a new PDF document
     const doc = new jsPDF()

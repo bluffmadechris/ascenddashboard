@@ -177,9 +177,14 @@ export default function ProfilePage() {
   const handleAvatarChange = async (newAvatar: string) => {
     try {
       setAvatar(newAvatar)
-      if (!isEditing) {
-        const success = await updateProfile(user?.id || "", {
+      if (!isEditing && user) {
+        const success = await updateProfile(user.id.toString(), {
+          name: user.name,
           avatar: newAvatar,
+          phone: user.phone,
+          title: user.title,
+          department: user.department,
+          role: user.role
         })
 
         if (success) {

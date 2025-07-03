@@ -65,11 +65,7 @@ export function ProfitStatsManager() {
             }
         } catch (error) {
             console.error('Error fetching profit stats:', error)
-            toast({
-                title: "Error",
-                description: "Failed to fetch profit stats",
-                variant: "destructive",
-            })
+            toast("Failed to fetch profit stats", { description: "", className: "text-destructive" })
         }
     }
 
@@ -93,7 +89,7 @@ export function ProfitStatsManager() {
                 setStats(data)
                 setIsLoading(false)
             } catch (error) {
-                toast.error("Failed to fetch profit statistics")
+                toast("Failed to fetch profit statistics", { description: "", className: "text-destructive" })
                 setIsLoading(false)
             }
         }
@@ -121,10 +117,7 @@ export function ProfitStatsManager() {
             })
 
             if (response.success) {
-                toast({
-                    title: "Success",
-                    description: "Profit stat created successfully",
-                })
+                toast("Profit stat created successfully")
                 fetchProfitStats()
                 setIsAddDialogOpen(false)
                 resetForm()
@@ -155,10 +148,7 @@ export function ProfitStatsManager() {
             })
 
             if (response.success) {
-                toast({
-                    title: "Success",
-                    description: "Profit stat updated successfully",
-                })
+                toast("Profit stat updated successfully")
                 fetchProfitStats()
                 setIsEditDialogOpen(false)
                 resetForm()
@@ -183,10 +173,7 @@ export function ProfitStatsManager() {
         try {
             const response = await apiClient.delete(`/dashboard/profit-stats/${id}`)
             if (response.success) {
-                toast({
-                    title: "Success",
-                    description: "Profit stat deleted successfully",
-                })
+                toast("Profit stat deleted successfully")
                 fetchProfitStats()
             }
         } catch (error) {
@@ -298,7 +285,7 @@ export function ProfitStatsManager() {
                             className="flex items-center justify-between p-4 border rounded-lg"
                         >
                             <div>
-                                <div className="font-medium">${stat.amount.toFixed(2)}</div>
+                                <div className="font-medium">${Number(stat.amount).toFixed(2)}</div>
                                 <div className="text-sm text-muted-foreground">
                                     {format(new Date(stat.month), "MMMM yyyy")}
                                 </div>

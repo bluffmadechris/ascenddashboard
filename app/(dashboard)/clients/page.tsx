@@ -19,12 +19,25 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/components/ui/use-toast"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { loadData, saveData } from "@/lib/data-persistence"
+
+// Define client type
+interface Client {
+  id: string
+  name: string
+  logo: string
+  industry: string
+  status: string
+  projects: number
+  totalSpent: string
+  contactPerson: string
+  contactEmail: string
+}
 
 export default function ClientsPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
-  const [clients, setClients] = useState([])
   const [formData, setFormData] = useState({
     name: "",
     industry: "",
@@ -34,7 +47,7 @@ export default function ClientsPage() {
   // Redirect restricted users to their specific client page
   useEffect(() => {
     if (user && user.role === "employee") {
-      const allowedClient = user.clientAccess.find((access) => access.canView)
+      const allowedClient = user.clientAccess?.find((access) => access.canView)
       if (allowedClient) {
         redirect(`/clients/${allowedClient.clientId}`)
       }
@@ -65,10 +78,24 @@ export default function ClientsPage() {
       name: formData.name,
       logo: formData.logo || `/placeholder.svg?key=${formData.name.toLowerCase()}`,
       industry: formData.industry,
+      status: "Active",
+      projects: 0,
+      totalSpent: "$0.00",
+      contactPerson: "",
+      contactEmail: "",
     }
 
-    // Add the client to the list
-    setClients((prevClients) => [...prevClients, newClient])
+    // Load existing clients
+    const existingClients = loadData<Record<string, Client>>("clients", {})
+
+    // Add the new client
+    const updatedClients = {
+      ...existingClients,
+      [newClient.id]: newClient,
+    }
+
+    // Save to storage
+    saveData("clients", updatedClients)
 
     // Show success message
     toast({
@@ -83,11 +110,6 @@ export default function ClientsPage() {
       logo: "",
     })
     setOpen(false)
-  }
-
-  // Handle client deletion
-  const handleClientDelete = (clientId, updatedClients) => {
-    setClients(updatedClients)
   }
 
   return (
@@ -111,7 +133,7 @@ export default function ClientsPage() {
           <CardDescription>View and manage all your clients.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ClientsList initialClients={clients} onClientDelete={handleClientDelete} />
+          <ClientsList />
         </CardContent>
       </Card>
 

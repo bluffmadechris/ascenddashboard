@@ -14,143 +14,213 @@ import {
   isValid,
 } from "date-fns"
 import type { CalendarEvent } from "@/lib/calendar-utils"
+import { getUserCalendarColor } from "@/lib/calendar-utils"
 import { cn } from "@/lib/utils"
 import { Card } from "../ui/card"
+import { Badge } from "../ui/badge"
+import { Clock, MapPin, Users } from "lucide-react"
 
 interface CalendarMonthViewProps {
-  selectedDate: Date
-  onDateSelect: (date: Date) => void
-  events?: CalendarEvent[]
-  availability?: any[]
+  currentDate: Date
+  events: CalendarEvent[]
+  onEventClick: (event: CalendarEvent) => void
+  onDateClick: (date: Date) => void
+  onCreateEventAtTime: (date: Date) => void
 }
 
 export function CalendarMonthView({
-  selectedDate,
-  onDateSelect,
+  currentDate,
   events = [],
-  availability = []
+  onEventClick,
+  onDateClick,
+  onCreateEventAtTime,
 }: CalendarMonthViewProps) {
-  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const monthStart = startOfMonth(currentDate)
+  const monthEnd = endOfMonth(monthStart)
+  const startDate = startOfWeek(monthStart)
+  const endDate = addDays(startOfWeek(endOfMonth(monthEnd)), 6)
 
-  const renderHeader = () => {
-    return (
-      <div className="flex items-center justify-between p-4 border-b">
-        <h2 className="text-lg font-semibold">
-          {format(currentMonth, "MMMM yyyy")}
-        </h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1))}
-            className="p-2 hover:bg-gray-100 rounded-md"
-          >
-            Previous
-          </button>
-          <button
-            onClick={() => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1))}
-            className="p-2 hover:bg-gray-100 rounded-md"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    )
+  // Get events for a specific date
+  const getEventsForDate = (date: Date) => {
+    return events.filter((event) => {
+      try {
+        const eventDate = parseISO(event.start)
+        return isValid(eventDate) && isSameDay(eventDate, date)
+      } catch (error) {
+        return false
+      }
+    })
   }
 
-  const renderDays = () => {
-    const dateFormat = "EEEE"
+  // Format time from ISO string
+  const formatEventTime = (isoString: string) => {
+    try {
+      const date = parseISO(isoString)
+      return format(date, "h:mm a")
+    } catch (error) {
+      return ""
+    }
+  }
+
+  const renderDayHeaders = () => {
     const days = []
-    const startDate = startOfWeek(currentMonth)
+    const startWeek = startOfWeek(new Date())
 
     for (let i = 0; i < 7; i++) {
       days.push(
-        <div key={i} className="font-semibold text-center py-2 border-b">
-          {format(addDays(startDate, i), dateFormat)}
+        <div key={i} className="py-3 text-center text-sm font-medium text-muted-foreground border-b min-w-0 truncate">
+          <span className="hidden sm:inline">{format(addDays(startWeek, i), "EEEE")}</span>
+          <span className="sm:hidden">{format(addDays(startWeek, i), "EEE")}</span>
         </div>
       )
     }
 
-    return <div className="grid grid-cols-7">{days}</div>
+    return <div className="grid grid-cols-7 gap-0 w-full">{days}</div>
   }
 
-  const renderCells = () => {
-    const monthStart = startOfMonth(currentMonth)
-    const monthEnd = endOfMonth(monthStart)
-    const startDate = startOfWeek(monthStart)
-    const endDate = endOfMonth(monthEnd)
-
+  const renderCalendarGrid = () => {
     const rows = []
-    let days = []
     let day = startDate
 
     while (day <= endDate) {
+      const week = []
+
       for (let i = 0; i < 7; i++) {
-        const cloneDay = day
-        const isSelected = isSameDay(selectedDate, day)
+        const currentDay = day
         const isCurrentMonth = isSameMonth(day, monthStart)
+        const isCurrentDay = isToday(day)
+        const dayEvents = getEventsForDate(day)
+        const hasEvents = dayEvents.length > 0
 
-        // Find events for this day
-        const dayEvents = events.filter(event =>
-          isSameDay(new Date(event.date), day)
-        )
-
-        // Find availability for this day
-        const dayAvailability = availability.find(a =>
-          isSameDay(new Date(a.date), day)
-        )
-
-        days.push(
+        week.push(
           <div
             key={day.toString()}
-            className={`min-h-[100px] p-2 border relative ${!isCurrentMonth ? "bg-gray-50 text-gray-400" : ""
-              } ${isSelected ? "bg-blue-50" : ""}`}
-            onClick={() => onDateSelect(cloneDay)}
+            className={cn(
+              "min-h-[100px] sm:min-h-[120px] p-1 sm:p-2 border-r border-b cursor-pointer hover:bg-muted/50 transition-colors min-w-0 overflow-hidden",
+              !isCurrentMonth && "bg-muted/20 text-muted-foreground",
+              isCurrentDay && "bg-primary/10",
+            )}
+            onClick={() => onDateClick(currentDay)}
+            onDoubleClick={() => onCreateEventAtTime(currentDay)}
           >
-            <div className="font-medium">{format(day, "d")}</div>
-
-            {/* Events */}
-            <div className="space-y-1 mt-1">
-              {dayEvents.map((event, index) => (
-                <div
-                  key={index}
-                  className="text-xs p-1 bg-blue-100 rounded truncate"
-                  title={event.title}
-                >
-                  {event.title}
-                </div>
-              ))}
+            {/* Date number */}
+            <div className="flex items-center justify-between mb-2">
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  isCurrentDay && "bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                )}
+              >
+                {format(day, "d")}
+              </span>
+              {hasEvents && (
+                <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                  {dayEvents.length}
+                </Badge>
+              )}
             </div>
 
-            {/* Availability Indicator */}
-            {dayAvailability && (
-              <div
-                className={`absolute bottom-1 right-1 w-2 h-2 rounded-full ${dayAvailability.isAvailable ? "bg-green-500" : "bg-red-500"
-                  }`}
-              />
-            )}
+            {/* Events */}
+            <div className="space-y-1">
+              {dayEvents.slice(0, 3).map((event) => (
+                <div
+                  key={event.id}
+                  className="group relative"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onEventClick(event)
+                  }}
+                >
+                  <div
+                    className={cn(
+                      "text-xs p-1.5 rounded-md cursor-pointer transition-all duration-200",
+                      "hover:shadow-sm hover:scale-[1.02] hover:z-10",
+                      "truncate max-w-full"
+                    )}
+                    style={{
+                      backgroundColor: event.color || getUserCalendarColor(event.createdBy),
+                      color: "white",
+                    }}
+                    title={`${event.title}${event.location ? ` - ${event.location}` : ""}`}
+                  >
+                    <div className="flex items-center space-x-1">
+                      {!event.allDay && (
+                        <Clock className="h-3 w-3 flex-shrink-0 opacity-80" />
+                      )}
+                      <span className="font-medium truncate">
+                        {!event.allDay && formatEventTime(event.start)} {event.title}
+                      </span>
+                    </div>
+
+                    {/* Additional event info on hover */}
+                    <div className="absolute left-0 top-full mt-1 bg-popover border rounded-md shadow-lg p-2 min-w-[200px] z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                      <div className="text-xs space-y-1">
+                        <div className="font-medium text-foreground">{event.title}</div>
+                        {!event.allDay && (
+                          <div className="flex items-center text-muted-foreground">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {formatEventTime(event.start)} - {formatEventTime(event.end)}
+                          </div>
+                        )}
+                        {event.location && (
+                          <div className="flex items-center text-muted-foreground">
+                            <MapPin className="h-3 w-3 mr-1" />
+                            {event.location}
+                          </div>
+                        )}
+                        {event.attendees && event.attendees.length > 0 && (
+                          <div className="flex items-center text-muted-foreground">
+                            <Users className="h-3 w-3 mr-1" />
+                            {event.attendees.length} attendees
+                          </div>
+                        )}
+                        {event.description && (
+                          <div className="text-muted-foreground line-clamp-2">
+                            {event.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Show more events indicator */}
+              {dayEvents.length > 3 && (
+                <div
+                  className="text-xs text-muted-foreground hover:text-foreground cursor-pointer p-1"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    // Show first additional event or a summary
+                    if (dayEvents[3]) {
+                      onEventClick(dayEvents[3])
+                    }
+                  }}
+                >
+                  +{dayEvents.length - 3} more
+                </div>
+              )}
+            </div>
           </div>
         )
+
         day = addDays(day, 1)
       }
+
       rows.push(
-        <div key={day.toString()} className="grid grid-cols-7">
-          {days}
+        <div key={day.toString()} className="grid grid-cols-7 gap-0 w-full">
+          {week}
         </div>
       )
-      days = []
     }
 
-    return <div className="flex-1">{rows}</div>
+    return <div className="flex-1 overflow-auto w-full">{rows}</div>
   }
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden">
-      {renderHeader()}
-      <div className="flex-1 overflow-auto">
-        <div className="min-w-[800px]"> {/* Minimum width to prevent squishing */}
-          {renderDays()}
-          {renderCells()}
-        </div>
-      </div>
-    </Card>
+    <div className="h-full flex flex-col w-full overflow-hidden">
+      {renderDayHeaders()}
+      {renderCalendarGrid()}
+    </div>
   )
 }

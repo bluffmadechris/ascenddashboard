@@ -24,26 +24,54 @@ export function AvatarUpload({
   const { user } = useAuth()
   const { toast } = useToast()
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const handleChangeAvatarUrl = async () => {
+    if (!user) return
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
+    const url = window.prompt(
+      "Enter the URL of your profile picture:\n\nRecommended services:\n" +
+      "1. https://picsum.photos/400/400 (random beautiful photo)\n" +
+      "2. https://placehold.co/400x400.png (simple placeholder)\n" +
+      "3. https://via.placeholder.com/400.jpg (another placeholder)\n\n" +
+      "Note: Stock photo services (like iStock, Shutterstock) don't allow direct image links. " +
+      "Please download the image first and upload it to your own hosting, or use one of the services above."
+    )?.trim()
+    if (!url) return
+
+    // Basic validation with special cases for known image services
+    const knownImageServices = [
+      'picsum.photos',
+      'placehold.co',
+      'via.placeholder.com',
+      'placekitten.com',
+      'placeimg.com'
+    ]
+
+    const isKnownService = knownImageServices.some(domain => url.includes(domain))
+    const hasImageExtension = /\.(png|jpe?g|gif|webp|svg)$/i.test(url)
+
+    if (!isKnownService && !hasImageExtension) {
       toast({
-        title: "Invalid file type",
-        description: "Please select an image file",
-        variant: "destructive"
+        title: "Invalid URL",
+        description: "Please provide either a direct link to an image file (ending in .jpg, .png, etc) or use one of the suggested image services.",
+        variant: "destructive",
       })
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    // Check for common stock photo services that block direct access
+    const blockedDomains = [
+      'istockphoto.com',
+      'shutterstock.com',
+      'gettyimages.com',
+      'adobe.stock.com',
+      'alamy.com'
+    ]
+
+    if (blockedDomains.some(domain => url.includes(domain))) {
       toast({
-        title: "File too large",
-        description: "File size must be less than 5MB",
-        variant: "destructive"
+        title: "Stock Photo Detected",
+        description: "Stock photo services don't allow direct image links. Please download the image first and upload it to your own hosting, or use one of the suggested placeholder services.",
+        variant: "destructive",
       })
       return
     }
@@ -51,37 +79,53 @@ export function AvatarUpload({
     setIsUploading(true)
 
     try {
-      // Create form data
-      const formData = new FormData()
-      formData.append('avatar', file)
-
-      // Upload to S3 through our API
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${user?.id}/avatar`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      // Verify the image URL is accessible
+      try {
+        const imgResponse = await fetch(url, { method: 'HEAD' })
+        if (!imgResponse.ok) {
+          throw new Error('Image not accessible')
         }
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to upload profile picture')
+        // For known services, we trust they return images
+        if (!isKnownService) {
+          // Verify it's an image by checking Content-Type
+          const contentType = imgResponse.headers.get('Content-Type')
+          if (!contentType?.startsWith('image/')) {
+            throw new Error('URL does not point to an image')
+          }
+        }
+      } catch (error) {
+        throw new Error(
+          'The image URL is not accessible. Please try:\n' +
+          '1. Using one of the suggested placeholder services\n' +
+          '2. Checking if the URL is correct and publicly accessible\n' +
+          '3. Using a different image hosting service'
+        )
       }
 
-      // Update avatar with the signed URL from the response
-      onAvatarChange(data.data.avatar_url)
+      // Send all required fields to avoid 400 Bad Request
+      const response = await apiClient.updateUser(user.id, {
+        name: user.name,
+        avatar: url,
+        phone: user.phone,
+        title: user.title,
+        department: user.department,
+        role: user.role
+      })
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to update profile picture')
+      }
+
+      onAvatarChange(url)
       toast({
-        title: "Success",
-        description: "Profile picture updated successfully"
+        title: 'Success',
+        description: 'Profile picture updated successfully.'
       })
     } catch (error) {
-      console.error('Error uploading avatar:', error)
+      console.error('Avatar URL update error:', error)
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Error uploading image",
-        variant: "destructive"
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to update profile picture',
+        variant: 'destructive',
       })
     } finally {
       setIsUploading(false)
@@ -95,27 +139,19 @@ export function AvatarUpload({
         <AvatarFallback className="text-lg">{getInitials(name)}</AvatarFallback>
       </Avatar>
 
-      <label
-        htmlFor="avatar-upload"
-        className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white transition-opacity cursor-pointer ${isHovering || isUploading ? "opacity-100" : "opacity-0"
-          }`}
+      <button
+        type="button"
+        onClick={handleChangeAvatarUrl}
+        className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white transition-opacity ${isHovering || isUploading ? 'opacity-100' : 'opacity-0'}`}
+        disabled={isUploading}
       >
         {isUploading ? (
           <Loader2 className="h-6 w-6 animate-spin" />
         ) : (
           <Camera className="h-6 w-6" />
         )}
-        <span className="sr-only">Upload new avatar</span>
-      </label>
-
-      <input
-        id="avatar-upload"
-        type="file"
-        accept="image/*"
-        className="sr-only"
-        onChange={handleFileChange}
-        disabled={isUploading}
-      />
+        <span className="sr-only">Change profile picture URL</span>
+      </button>
     </div>
   )
 }

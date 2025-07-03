@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
-import { type CalendarEvent, loadCalendarEvents } from "@/lib/calendar-utils"
+import { type CalendarEvent, loadCalendarEvents, getEventsForUsers, getUserCalendarColor, getTeamAvailability, findCommonAvailableSlots, createCalendarEventWithConflictCheck, getUserCalendarStats } from "@/lib/calendar-utils"
 import { CalendarMonthView } from "@/components/calendar/calendar-month-view"
 import { CreateEventDialog } from "@/components/calendar/create-event-dialog"
 import { ViewEventDialog } from "@/components/calendar/view-event-dialog"
@@ -55,9 +55,14 @@ export default function CalendarPage() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [showViewEvent, setShowViewEvent] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false)
   const [availability, setAvailability] = useState<Availability | null>(null)
   const [selectedTab, setSelectedTab] = useState("calendar")
   const [showEmployeeMeetingDialog, setShowEmployeeMeetingDialog] = useState(false)
+
+  // New state for employee calendar viewing
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([])
+  const [showTeamAvailability, setShowTeamAvailability] = useState(false)
 
   // Reference to the sidebar container
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -146,16 +151,38 @@ export default function CalendarPage() {
         color: '#10b981', // Green color for meeting requests
         createdAt: request.createdAt,
         updatedAt: request.updatedAt,
+        allDay: false,
       }))
   }
 
-  // Load events
+  // Load events with support for multiple users
   useEffect(() => {
-    const loadEvents = () => {
+    const loadEvents = async () => {
       if (!user) return
 
+      setIsLoadingEvents(true)
       try {
-        const allEvents = loadCalendarEvents()
+        let allEvents: CalendarEvent[] = []
+
+        if (selectedEmployees.length > 0) {
+          // Load events for selected employees + current user
+          const userIds = [...selectedEmployees, user.id]
+          allEvents = await getEventsForUsers(userIds)
+
+          // Apply user colors to events
+          allEvents = allEvents.map(event => ({
+            ...event,
+            color: event.color || getUserCalendarColor(event.createdBy)
+          }))
+        } else {
+          // Load only current user's events
+          const loadedEvents = await loadCalendarEvents()
+          allEvents = loadedEvents.filter(event =>
+            event.createdBy === user.id ||
+            event.attendees?.includes(user.id) ||
+            event.assignedTo?.includes(user.id)
+          )
+        }
 
         // Load meeting requests and convert them to events
         const meetingRequestsAsRequester = getMeetingRequestsForUser(user.id, 'requester')
@@ -173,14 +200,16 @@ export default function CalendarPage() {
           description: "Failed to load calendar events",
           variant: "destructive",
         })
+      } finally {
+        setIsLoadingEvents(false)
       }
     }
 
     loadEvents()
 
-    // Listen for storage events to refresh events
+    // Listen for storage events to refresh events (for meeting requests)
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key?.includes("calendar") || e.key?.includes("meeting-requests")) {
+      if (e.key?.includes("meeting-requests")) {
         loadEvents()
       }
     }
@@ -189,7 +218,7 @@ export default function CalendarPage() {
     return () => {
       window.removeEventListener("storage", handleStorageChange)
     }
-  }, [toast, refreshKey, user])
+  }, [toast, refreshKey, user, selectedEmployees])
 
   // Handle date navigation
   const goToToday = () => {
@@ -385,8 +414,19 @@ export default function CalendarPage() {
     }
   }
 
-  // Create event
-  const createEvent = () => {
+  // Handle employee selection toggle
+  const handleEmployeeToggle = (userId: string) => {
+    setSelectedEmployees(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId)
+      } else {
+        return [...prev, userId]
+      }
+    })
+  }
+
+  // Enhanced event creation with conflict checking
+  const createEventWithConflictCheck = () => {
     if (!user) return
 
     try {
@@ -403,68 +443,81 @@ export default function CalendarPage() {
         return
       }
 
-      // Create event
-      const newEvent: Omit<CalendarEvent, "id"> = {
+      // Create event with conflict checking
+      const newEvent: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt"> = {
         title: eventTitle,
         start: eventStart.toISOString(),
         end: eventEnd.toISOString(),
         type: "meeting",
         status: "confirmed",
         createdBy: user.id,
-        assignedTo: selectedUsers,
+        attendees: selectedUsers,
         description: eventDescription,
         location: eventLocation,
-        color: "#3b82f6", // Blue
+        color: getUserCalendarColor(user.id),
+        allDay: false,
       }
 
-      const createdEvent = createCalendarEvent(newEvent)
-      setEvents([...events, createdEvent])
+      const { event: createdEvent, conflicts } = createCalendarEventWithConflictCheck(newEvent, true)
 
-      // Send email notifications if enabled
-      if (sendEmailNotifications) {
-        // Get participant details
-        const participants = selectedUsers.map((userId) => {
-          const userDetails = users.find((u) => u.id === userId)
-          return {
-            id: userId,
-            name: userDetails?.name || "Unknown User",
-            email: userDetails?.email || "unknown@example.com",
-          }
-        })
+      if (createdEvent) {
+        setEvents([...events, createdEvent])
 
-        // Get organizer details
-        const organizer = {
-          name: user.name,
-          email: user.email,
+        // Show conflict warning if any
+        if (conflicts.length > 0) {
+          toast({
+            title: "Event created with conflicts",
+            description: `${conflicts.length} scheduling conflicts detected. Please review attendee availability.`,
+            variant: "destructive",
+          })
         }
 
-        // Send meeting invitations
-        const success = simulateSendMeetingInvitation(
-          {
-            title: eventTitle,
-            start: eventStart.toISOString(),
-            end: eventEnd.toISOString(),
-            description: eventDescription,
-            location: eventLocation,
-          },
-          participants,
-          organizer,
-        )
+        // Send email notifications if enabled
+        if (sendEmailNotifications) {
+          // Get participant details
+          const participants = selectedUsers.map((userId) => {
+            const userDetails = users.find((u) => u.id === userId)
+            return {
+              id: userId,
+              name: userDetails?.name || "Unknown User",
+              email: userDetails?.email || "unknown@example.com",
+            }
+          })
 
-        // Show notification
-        setNotification({
-          show: true,
-          success: success,
-          message: success ? "Meeting invitations sent successfully" : "Failed to send meeting invitations",
-        })
+          // Get organizer details
+          const organizer = {
+            name: user.name,
+            email: user.email,
+          }
+
+          // Send meeting invitations
+          const success = simulateSendMeetingInvitation(
+            {
+              title: eventTitle,
+              start: eventStart.toISOString(),
+              end: eventEnd.toISOString(),
+              description: eventDescription,
+              location: eventLocation,
+            },
+            participants,
+            organizer,
+          )
+
+          // Show notification
+          setNotification({
+            show: true,
+            success: success,
+            message: success ? "Meeting invitations sent successfully" : "Failed to send meeting invitations",
+          })
+        }
+
+        // Reset form
+        setEventTitle("")
+        setEventDescription("")
+        setEventLocation("")
+        setSelectedUsers([])
+        setShowEventForm(false)
       }
-
-      // Reset form
-      setEventTitle("")
-      setEventDescription("")
-      setEventLocation("")
-      setSelectedUsers([])
-      setShowEventForm(false)
     } catch (error) {
       console.error("Error creating event:", error)
       setNotification({
@@ -475,19 +528,46 @@ export default function CalendarPage() {
     }
   }
 
+  // Get team availability for selected date
+  const getSelectedDateTeamAvailability = () => {
+    if (selectedEmployees.length === 0) return {}
+    return getTeamAvailability([...selectedEmployees, user.id], selectedDate)
+  }
+
+  // Find common available slots for team
+  const getCommonAvailableSlots = () => {
+    if (selectedEmployees.length === 0) return []
+    return findCommonAvailableSlots([...selectedEmployees, user.id], selectedDate, 60)
+  }
+
   // Delete event
-  const handleDeleteEvent = (eventId: string) => {
+  const handleDeleteEvent = async (eventId: string) => {
     try {
-      const success = deleteCalendarEvent(eventId)
+      const success = await deleteCalendarEvent(eventId)
       if (success) {
         setEvents(events.filter((e) => e.id !== eventId))
         if (selectedEvent && selectedEvent.id === eventId) {
           setSelectedEvent(null)
           setShowEventDetails(false)
         }
+        toast({
+          title: "Success",
+          description: "Event deleted successfully",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to delete event",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error deleting event:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete event",
+        variant: "destructive",
+      })
     }
   }
 
@@ -636,7 +716,14 @@ export default function CalendarPage() {
       />
 
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-3xl font-bold">Calendar</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Calendar</h1>
+          {selectedEmployees.length > 0 && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Viewing {selectedEmployees.length} team member{selectedEmployees.length > 1 ? 's' : ''} + your calendar
+            </p>
+          )}
+        </div>
         <div className="flex items-center space-x-2">
           <Button onClick={goToToday}>Today</Button>
           <Button variant="outline" size="icon" onClick={goToPrevious}>
@@ -682,7 +769,7 @@ export default function CalendarPage() {
       </div>
 
       <div className="flex flex-1 gap-4 overflow-hidden">
-        {/* Calendar sidebar with ref */}
+        {/* Calendar sidebar with enhanced functionality */}
         <div ref={sidebarRef} className="hidden lg:block w-64 overflow-auto">
           <CalendarSidebar
             selectedDate={selectedDate}
@@ -691,6 +778,8 @@ export default function CalendarPage() {
             refreshEvents={refreshEvents}
             events={events}
             onEventClick={handleEventClick}
+            selectedEmployees={selectedEmployees}
+            onEmployeeToggle={handleEmployeeToggle}
           />
         </div>
 
@@ -698,24 +787,35 @@ export default function CalendarPage() {
         <div className="flex-1 overflow-hidden">
           <Card className="h-full overflow-hidden">
             <CardContent className="p-0 h-full">
-              {view === "month" && (
-                <CalendarMonthView
-                  currentDate={currentDate}
-                  events={events}
-                  onEventClick={handleEventClick}
-                  onDateClick={handleDateClick}
-                  onCreateEventAtTime={handleCreateEventAtTime}
-                />
-              )}
-              {view === "availability" && (
-                <IntegratedAvailabilityCalendar
-                  currentDate={currentDate}
-                  events={events}
-                  onEventClick={handleEventClick}
-                  onDateClick={handleDateClick}
-                  onCreateEventAtTime={handleCreateEventAtTime}
-                  onAvailabilityChange={handleAvailabilityChange}
-                />
+              {isLoadingEvents ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                    <p className="text-sm text-muted-foreground">Loading calendar events...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {view === "month" && (
+                    <CalendarMonthView
+                      currentDate={currentDate}
+                      events={events}
+                      onEventClick={handleEventClick}
+                      onDateClick={handleDateClick}
+                      onCreateEventAtTime={handleCreateEventAtTime}
+                    />
+                  )}
+                  {view === "availability" && (
+                    <IntegratedAvailabilityCalendar
+                      currentDate={currentDate}
+                      events={events}
+                      onEventClick={handleEventClick}
+                      onDateClick={handleDateClick}
+                      onCreateEventAtTime={handleCreateEventAtTime}
+                      onAvailabilityChange={handleAvailabilityChange}
+                    />
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -741,7 +841,7 @@ export default function CalendarPage() {
         />
       )}
 
-      {/* Schedule Meeting Dialog */}
+      {/* Schedule Meeting Dialog with enhanced conflict detection */}
       <Dialog open={showEventForm} onOpenChange={setShowEventForm}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -868,6 +968,62 @@ export default function CalendarPage() {
               />
             </div>
 
+            {/* Show team availability if employees are selected */}
+            {selectedEmployees.length > 0 && (
+              <div className="grid gap-2">
+                <Label>Team Availability for {format(selectedDate, "MMM d, yyyy")}</Label>
+                <div className="bg-muted/50 p-3 rounded-lg space-y-2">
+                  {Object.entries(getSelectedDateTeamAvailability()).map(([userId, availability]) => (
+                    <div key={userId} className="flex items-center justify-between text-sm">
+                      <span className="font-medium">User {userId}</span>
+                      <div className="flex items-center space-x-2">
+                        <div className={`w-2 h-2 rounded-full ${availability.available ? 'bg-green-500' : 'bg-red-500'}`} />
+                        <span className={availability.available ? 'text-green-600' : 'text-red-600'}>
+                          {availability.available ? 'Available' : 'Unavailable'}
+                        </span>
+                        {availability.startTime && availability.endTime && (
+                          <span className="text-muted-foreground">
+                            {availability.startTime} - {availability.endTime}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Show common available slots */}
+                  {getCommonAvailableSlots().length > 0 && (
+                    <div className="mt-3 pt-3 border-t">
+                      <p className="text-sm font-medium mb-2">Suggested meeting times:</p>
+                      <div className="space-y-1">
+                        {getCommonAvailableSlots().slice(0, 3).map((slot, index) => (
+                          <Button
+                            key={index}
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-auto py-1"
+                            onClick={() => {
+                              const [startHour, startMinute] = slot.startTime.split(':').map(Number)
+                              const [endHour, endMinute] = slot.endTime.split(':').map(Number)
+
+                              const newStart = new Date(selectedDate)
+                              newStart.setHours(startHour, startMinute)
+                              const newEnd = new Date(selectedDate)
+                              newEnd.setHours(endHour, endMinute)
+
+                              setEventStart(newStart)
+                              setEventEnd(newEnd)
+                            }}
+                          >
+                            {slot.startTime} - {slot.endTime} ({slot.availableUsers.length} available)
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="sendEmails"
@@ -878,7 +1034,7 @@ export default function CalendarPage() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Button onClick={createEvent}>Create Meeting</Button>
+            <Button onClick={createEventWithConflictCheck}>Create Meeting</Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -21,68 +21,27 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { CalendarEvent } from "@/lib/calendar-utils"
 import { Badge } from "@/components/ui/badge"
-import { api } from "@/lib/api-client"
-import { toast } from "sonner"
 
 interface ViewEventDialogProps {
-  isOpen: boolean
-  onClose: () => void
-  eventId: string
-}
-
-interface EventViewer {
-  id: string
-  name: string
-  email: string
-}
-
-interface Event {
-  id: string
-  title: string
-  description: string
-  start: string
-  end: string
-  viewers: EventViewer[]
-  createdBy: {
-    name: string
-    email: string
-  }
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  event: CalendarEvent
+  onEventUpdated: () => void
+  onEventDeleted: () => void
 }
 
 export function ViewEventDialog({
-  isOpen,
-  onClose,
-  eventId,
+  open,
+  onOpenChange,
+  event,
+  onEventUpdated,
+  onEventDeleted,
 }: ViewEventDialogProps) {
   const { user } = useAuth()
   const { toast: useToastToast } = useToast()
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
-  const [event, setEvent] = useState<Event | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const fetchEvent = async () => {
-      if (!eventId) return
-
-      try {
-        setIsLoading(true)
-        setError(null)
-        const response = await api.get(`/calendar/events/${eventId}`)
-        setEvent(response.data)
-      } catch (error) {
-        setError("Failed to load event details")
-        useToastToast.error("Failed to load event details")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    if (isOpen) {
-      fetchEvent()
-    }
-  }, [eventId, isOpen, useToastToast])
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Format date and time
   const formatDateTime = (dateStr: string) => {
@@ -95,19 +54,27 @@ export function ViewEventDialog({
 
   // Check if user can edit/delete the event
   const canModifyEvent = () => {
-    return user && (user.role === "owner" || event?.createdBy.email === user.email)
+    return user && (user.role === "owner" || event?.createdBy === user.id)
   }
 
   // Handle event deletion
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = async () => {
+    if (!event) return
+
+    setIsDeleting(true)
     try {
-      deleteCalendarEvent(event?.id)
-      useToastToast({
-        title: "Success",
-        description: "Event deleted successfully",
-      })
-      onClose()
-      setShowDeleteDialog(false)
+      const success = await deleteCalendarEvent(event.id)
+      if (success) {
+        useToastToast({
+          title: "Success",
+          description: "Event deleted successfully",
+        })
+        onEventDeleted()
+        onOpenChange(false)
+        setShowDeleteDialog(false)
+      } else {
+        throw new Error("Failed to delete event")
+      }
     } catch (error) {
       console.error("Error deleting event:", error)
       useToastToast({
@@ -115,79 +82,70 @@ export function ViewEventDialog({
         description: "Failed to delete event",
         variant: "destructive",
       })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
-  // Get event type label
-  const getEventTypeLabel = () => {
-    switch (event?.type) {
-      case "meeting":
-        return "Meeting"
-      case "personal":
-        return "Personal"
-      case "holiday":
-        return "Holiday"
-      default:
-        return "Event"
-    }
-  }
+
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>
-              {isLoading ? "Loading..." : error ? "Error" : event?.title}
-            </DialogTitle>
+            <DialogTitle>{event?.title}</DialogTitle>
           </DialogHeader>
 
-          {isLoading ? (
-            <div className="py-6">Loading event details...</div>
-          ) : error ? (
-            <div className="py-6 text-red-500">{error}</div>
-          ) : event ? (
-            <div className="py-4 space-y-4">
-              <div>
-                <h3 className="font-medium mb-1">Time</h3>
-                <p className="text-sm text-muted-foreground">
-                  {formatDateTime(event.start)} - {formatDateTime(event.end)}
-                </p>
-              </div>
-
-              {event.description && (
-                <div>
-                  <h3 className="font-medium mb-1">Description</h3>
-                  <p className="text-sm text-muted-foreground">{event.description}</p>
-                </div>
-              )}
-
-              <div>
-                <h3 className="font-medium mb-1">Created By</h3>
-                <p className="text-sm text-muted-foreground">
-                  {event.createdBy.name} ({event.createdBy.email})
-                </p>
-              </div>
-
-              {event.viewers && event.viewers.length > 0 && (
-                <div>
-                  <h3 className="font-medium mb-1">Viewers</h3>
-                  <div className="space-y-1">
-                    {event.viewers.map((viewer) => (
-                      <p key={viewer.id} className="text-sm text-muted-foreground">
-                        {viewer.name} ({viewer.email})
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
+          <div className="py-4 space-y-4">
+            <div>
+              <h3 className="font-medium mb-1">Time</h3>
+              <p className="text-sm text-muted-foreground">
+                {formatDateTime(event.start)} - {formatDateTime(event.end)}
+              </p>
             </div>
-          ) : null}
+
+            {event.description && (
+              <div>
+                <h3 className="font-medium mb-1">Description</h3>
+                <p className="text-sm text-muted-foreground">{event.description}</p>
+              </div>
+            )}
+
+            {event.location && (
+              <div>
+                <h3 className="font-medium mb-1">Location</h3>
+                <p className="text-sm text-muted-foreground">{event.location}</p>
+              </div>
+            )}
+
+            <div>
+              <h3 className="font-medium mb-1">Type</h3>
+              <Badge variant="secondary">{event.type}</Badge>
+            </div>
+
+            {event.attendees && event.attendees.length > 0 && (
+              <div>
+                <h3 className="font-medium mb-1">Attendees</h3>
+                <div className="space-y-1">
+                  {event.attendees.map((attendeeId) => (
+                    <p key={attendeeId} className="text-sm text-muted-foreground">
+                      User {attendeeId}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <DialogFooter>
             {canModifyEvent() && (
               <div className="flex space-x-2">
-                <Button variant="outline" onClick={() => setShowDeleteDialog(true)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowDeleteDialog(true)}
+                  disabled={isDeleting}
+                >
                   <Trash className="h-4 w-4 mr-2" />
                   Delete
                 </Button>
@@ -207,9 +165,9 @@ export function ViewEventDialog({
           open={showEditDialog}
           onOpenChange={setShowEditDialog}
           event={event}
-          onEventUpdated={(updatedEvent) => {
-            setEvent(updatedEvent)
-            onClose()
+          onEventUpdated={() => {
+            onEventUpdated()
+            onOpenChange(false)
           }}
         />
       )}
@@ -226,8 +184,12 @@ export function ViewEventDialog({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteEvent} className="bg-destructive text-destructive-foreground">
-              Delete
+            <AlertDialogAction
+              onClick={handleDeleteEvent}
+              className="bg-destructive text-destructive-foreground"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

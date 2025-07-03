@@ -463,7 +463,7 @@ export default function ClientPage({ params }: { params: { clientId: string } })
                 <CardDescription>Recent projects for this client.</CardDescription>
               </CardHeader>
               <CardContent>
-                <ClientProjects limit={5} />
+                <ClientProjects clientId={params.clientId} limit={5} />
               </CardContent>
             </Card>
             <Card className="col-span-1">

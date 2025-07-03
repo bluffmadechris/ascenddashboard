@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button"
 import { TeamProfileEditor } from "@/components/dashboard/team-profile-editor"
 import { SendNotificationForm } from "@/components/dashboard/send-notification"
 import { ProfitStatsManager } from "@/components/dashboard/profit-stats-manager"
-import api from "@/lib/api-client"
+import { api } from "@/lib/api-client"
 import { toast } from "sonner"
 
 interface OwnerStats {

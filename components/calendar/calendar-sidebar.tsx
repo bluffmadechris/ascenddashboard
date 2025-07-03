@@ -14,7 +14,7 @@ import {
   isFuture,
   isEqual,
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, Clock, MapPin, Users } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, Clock, MapPin, Users, Calendar, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -23,8 +23,11 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Avatar } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useAuth } from "@/lib/auth-context"
+import { EmployeeCalendarSelector } from "./employee-calendar-selector"
 import type { CalendarEvent } from "@/lib/calendar-utils"
+import { getUserCalendarColor } from "@/lib/calendar-utils"
 
 interface CalendarSidebarProps {
   selectedDate: Date
@@ -33,6 +36,8 @@ interface CalendarSidebarProps {
   refreshEvents: () => void
   events: CalendarEvent[]
   onEventClick: (event: CalendarEvent) => void
+  selectedEmployees?: string[]
+  onEmployeeToggle?: (userId: string) => void
 }
 
 export function CalendarSidebar({
@@ -42,12 +47,16 @@ export function CalendarSidebar({
   refreshEvents,
   events,
   onEventClick,
+  selectedEmployees = [],
+  onEmployeeToggle,
 }: CalendarSidebarProps) {
+  const { user } = useAuth()
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [calendarFilters, setCalendarFilters] = useState({
     meetings: true,
     personal: true,
     holidays: true,
+    availability: true,
   })
   const [showAllEvents, setShowAllEvents] = useState(false)
 
@@ -103,6 +112,16 @@ export function CalendarSidebar({
     }
   }
 
+  // Get events for selected date
+  const selectedDateEvents = events.filter((event) => {
+    try {
+      const eventDate = parseISO(event.start)
+      return isSameDay(eventDate, selectedDate)
+    } catch (error) {
+      return false
+    }
+  })
+
   // Get upcoming events (limited to 5 for the sidebar)
   const upcomingEvents = events
     .filter((event) => {
@@ -120,8 +139,21 @@ export function CalendarSidebar({
     })
     .sort((a, b) => parseISO(a.start).getTime() - parseISO(b.start).getTime())
 
+  // Check if date has events
+  const hasEventsOnDate = (date: Date) => {
+    return events.some((event) => {
+      try {
+        const eventDate = parseISO(event.start)
+        return isSameDay(eventDate, date)
+      } catch (error) {
+        return false
+      }
+    })
+  }
+
   return (
     <div className="space-y-4">
+      {/* Mini Calendar */}
       <Card className="bg-[#0f1729] text-white border-none">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
@@ -139,8 +171,8 @@ export function CalendarSidebar({
         <CardContent className="pt-0">
           {/* Mini calendar */}
           <div className="grid grid-cols-7 text-center text-xs">
-            {getDayHeaders().map((day) => (
-              <div key={day} className="py-1 font-medium">
+            {getDayHeaders().map((day, index) => (
+              <div key={`day-header-${index}`} className="py-1 font-medium">
                 {day}
               </div>
             ))}
@@ -156,24 +188,40 @@ export function CalendarSidebar({
               <div
                 key={day.toString()}
                 className={cn(
-                  "p-2 cursor-pointer rounded-full hover:bg-white/10",
+                  "p-2 cursor-pointer rounded-full hover:bg-white/10 relative",
                   isSameDay(day, selectedDate) && "bg-[#3b82f6] text-white",
                   isToday(day) && !isSameDay(day, selectedDate) && "border border-[#3b82f6]",
                 )}
                 onClick={() => onDateSelect(day)}
               >
                 {format(day, "d")}
+                {hasEventsOnDate(day) && (
+                  <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2">
+                    <div className="w-1 h-1 bg-[#22c55e] rounded-full" />
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
 
+      {/* Create Event Button */}
       <Button className="w-full bg-[#3b82f6] hover:bg-[#2563eb]" onClick={onCreateEvent}>
         <Plus className="h-4 w-4 mr-2" />
         Create Event
       </Button>
 
+      {/* Employee Calendar Selector - Only for owners/managers */}
+      {onEmployeeToggle && (
+        <EmployeeCalendarSelector
+          selectedEmployees={selectedEmployees}
+          onEmployeeToggle={onEmployeeToggle}
+          events={events}
+        />
+      )}
+
+      {/* Calendar Filters */}
       <Card className="bg-[#0f1729] text-white border-none">
         <CardHeader>
           <CardTitle className="text-base font-medium">My Calendars</CardTitle>
@@ -206,168 +254,165 @@ export function CalendarSidebar({
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox
-                id="holidays"
-                checked={calendarFilters.holidays}
-                onCheckedChange={() => handleFilterChange("holidays")}
-                className="border-[#ef4444] data-[state=checked]:bg-[#ef4444] data-[state=checked]:text-white"
+                id="availability"
+                checked={calendarFilters.availability}
+                onCheckedChange={() => handleFilterChange("availability")}
+                className="border-[#f59e0b] data-[state=checked]:bg-[#f59e0b] data-[state=checked]:text-white"
               />
-              <Label htmlFor="holidays" className="flex items-center text-white">
-                <Badge className="mr-2 bg-[#ef4444] h-3 w-3 rounded-full p-0" />
-                Holidays
+              <Label htmlFor="availability" className="flex items-center text-white">
+                <Badge className="mr-2 bg-[#f59e0b] h-3 w-3 rounded-full p-0" />
+                Availability
               </Label>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Upcoming Events section with ref for scrolling */}
-      <div ref={upcomingEventsRef} id="upcoming-events" className="scroll-mt-4">
+      {/* Selected Date Events */}
+      {selectedDateEvents.length > 0 && (
         <Card className="bg-[#0f1729] text-white border-none">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium">Upcoming Events</CardTitle>
+          <CardHeader>
+            <CardTitle className="text-base font-medium flex items-center">
+              <Calendar className="h-4 w-4 mr-2" />
+              {format(selectedDate, "MMM d")} Events
+            </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[240px] px-4 py-2">
-              <div className="space-y-3 pr-3">
-                {upcomingEvents.map((event) => (
+          <CardContent>
+            <ScrollArea className="max-h-48">
+              <div className="space-y-2">
+                {selectedDateEvents.map((event) => (
                   <div
                     key={event.id}
-                    className="rounded-md p-3 transition-colors cursor-pointer hover:bg-white/5"
-                    style={{ backgroundColor: `${event.color}20` }}
+                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors"
                     onClick={() => onEventClick(event)}
                   >
-                    <div className="flex items-start">
+                    <div className="flex items-start space-x-2">
                       <div
-                        className="w-1 h-full rounded-full self-stretch mr-2 flex-shrink-0"
-                        style={{ backgroundColor: event.color }}
+                        className="w-2 h-2 mt-2 rounded-full flex-shrink-0"
+                        style={{
+                          backgroundColor: event.color || getUserCalendarColor(event.createdBy)
+                        }}
                       />
-                      <div className="flex-1">
-                        <h4 className="font-medium text-sm">{event.title}</h4>
-                        <div className="flex items-center mt-1 text-xs text-gray-300">
-                          <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
-                          <span>
-                            {format(parseISO(event.start), "EEE, MMM d")} · {formatEventTime(event.start)}
-                          </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{event.title}</p>
+                        <div className="flex items-center space-x-2 text-xs text-white/60">
+                          <Clock className="h-3 w-3" />
+                          <span>{formatEventTime(event.start)}</span>
+                          {event.location && (
+                            <>
+                              <MapPin className="h-3 w-3" />
+                              <span className="truncate">{event.location}</span>
+                            </>
+                          )}
                         </div>
-                        {event.location && (
-                          <div className="flex items-center text-xs text-gray-300 mt-1">
-                            <MapPin className="h-3 w-3 mr-1 flex-shrink-0" />
-                            <span>{event.location}</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
                 ))}
-                {upcomingEvents.length === 0 && (
-                  <div className="text-center py-8 text-gray-400">
-                    <p>No upcoming events</p>
-                  </div>
-                )}
               </div>
             </ScrollArea>
-            <div className="px-4 py-2 border-t border-gray-800">
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upcoming Events */}
+      <Card className="bg-[#0f1729] text-white border-none">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-medium" ref={upcomingEventsRef} id="upcoming-events">
+              Upcoming Events
+            </CardTitle>
+            {allUpcomingEvents.length > 5 && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full text-xs text-gray-300 hover:text-white hover:bg-white/10"
                 onClick={() => setShowAllEvents(true)}
+                className="text-xs text-white/70 hover:text-white hover:bg-white/10"
               >
-                View All Events
+                View All ({allUpcomingEvents.length})
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* All Events Dialog */}
-      <Dialog open={showAllEvents} onOpenChange={setShowAllEvents}>
-        <DialogContent className="bg-[#0f1729] text-white border-none max-w-3xl max-h-[80vh] overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold">All Upcoming Events</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="h-[calc(80vh-120px)] pr-4">
-            <div className="space-y-4 py-2">
-              {allUpcomingEvents.length === 0 ? (
-                <div className="text-center py-8 text-gray-400">
-                  <p>No upcoming events</p>
-                </div>
-              ) : (
-                allUpcomingEvents.map((event) => (
-                  <Card
-                    key={event.id}
-                    className="bg-[#1a2542] border-none cursor-pointer hover:bg-[#243050] transition-colors"
-                    onClick={() => {
-                      setShowAllEvents(false)
-                      onEventClick(event)
-                    }}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="w-1.5 h-full rounded-full self-stretch flex-shrink-0 mt-1"
-                          style={{ backgroundColor: event.color }}
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between">
-                            <h3 className="font-semibold text-lg">{event.title}</h3>
-                            <Badge
-                              className="ml-2"
-                              style={{
-                                backgroundColor: event.color,
-                                color: "white",
-                              }}
-                            >
-                              {event.type}
-                            </Badge>
-                          </div>
-
-                          <div className="mt-2 space-y-1.5">
-                            <div className="flex items-center text-sm text-gray-300">
-                              <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
-                              <span>
-                                {format(parseISO(event.start), "EEEE, MMMM d, yyyy")} · {formatEventTime(event.start)}{" "}
-                                to {formatEventTime(event.end)}
-                              </span>
-                            </div>
-
-                            {event.location && (
-                              <div className="flex items-center text-sm text-gray-300">
-                                <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
-                                <span>{event.location}</span>
-                              </div>
-                            )}
-
-                            {event.assignedTo && event.assignedTo.length > 0 && (
-                              <div className="flex items-center text-sm text-gray-300 mt-1">
-                                <Users className="h-4 w-4 mr-2 flex-shrink-0" />
-                                <div className="flex items-center">
-                                  <div className="flex -space-x-2 mr-2">
-                                    {event.assignedTo.slice(0, 3).map((userId, index) => (
-                                      <Avatar key={userId} className="h-6 w-6 border border-[#0f1729]">
-                                        <div className="bg-gray-600 h-full w-full flex items-center justify-center text-xs">
-                                          {userId.charAt(0).toUpperCase()}
-                                        </div>
-                                      </Avatar>
-                                    ))}
-                                  </div>
-                                  {event.assignedTo.length > 3 && (
-                                    <span className="text-xs text-gray-400">+{event.assignedTo.length - 3} more</span>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {event.description && (
-                              <div className="mt-2 text-sm text-gray-300 line-clamp-2">{event.description}</div>
-                            )}
-                          </div>
-                        </div>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {upcomingEvents.length > 0 ? (
+            <div className="space-y-2">
+              {upcomingEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="p-2 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors"
+                  onClick={() => onEventClick(event)}
+                >
+                  <div className="flex items-start space-x-2">
+                    <div
+                      className="w-2 h-2 mt-2 rounded-full flex-shrink-0"
+                      style={{
+                        backgroundColor: event.color || getUserCalendarColor(event.createdBy)
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{event.title}</p>
+                      <div className="flex items-center space-x-2 text-xs text-white/60">
+                        <Clock className="h-3 w-3" />
+                        <span>{format(parseISO(event.start), "MMM d, h:mm a")}</span>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))
-              )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-white/60">No upcoming events</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* All Upcoming Events Dialog */}
+      <Dialog open={showAllEvents} onOpenChange={setShowAllEvents}>
+        <DialogContent className="sm:max-w-[500px] bg-[#0f1729] text-white border-gray-800">
+          <DialogHeader>
+            <DialogTitle>All Upcoming Events ({allUpcomingEvents.length})</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-96">
+            <div className="space-y-2">
+              {allUpcomingEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="p-3 rounded-lg bg-white/5 hover:bg-white/10 cursor-pointer transition-colors"
+                  onClick={() => {
+                    onEventClick(event)
+                    setShowAllEvents(false)
+                  }}
+                >
+                  <div className="flex items-start space-x-3">
+                    <div
+                      className="w-3 h-3 mt-1 rounded-full flex-shrink-0"
+                      style={{
+                        backgroundColor: event.color || getUserCalendarColor(event.createdBy)
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-white">{event.title}</p>
+                      <div className="flex items-center space-x-2 text-sm text-white/60 mt-1">
+                        <Clock className="h-4 w-4" />
+                        <span>{format(parseISO(event.start), "MMM d, yyyy 'at' h:mm a")}</span>
+                      </div>
+                      {event.location && (
+                        <div className="flex items-center space-x-2 text-sm text-white/60 mt-1">
+                          <MapPin className="h-4 w-4" />
+                          <span>{event.location}</span>
+                        </div>
+                      )}
+                      {event.attendees && event.attendees.length > 0 && (
+                        <div className="flex items-center space-x-2 text-sm text-white/60 mt-1">
+                          <Users className="h-4 w-4" />
+                          <span>{event.attendees.length} attendees</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </ScrollArea>
         </DialogContent>

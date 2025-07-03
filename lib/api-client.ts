@@ -1,7 +1,13 @@
 // API Client for Ascend Media Dashboard
 // Handles all communication with the backend API server
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// Determine API base URL based on environment
+// 1. In development (NODE_ENV === 'development') we prefer NEXT_PUBLIC_API_URL_DEV, falling back to localhost
+// 2. In production we use NEXT_PUBLIC_API_URL (which should point at the live API)
+const API_BASE_URL =
+  process.env.NODE_ENV === 'development'
+    ? process.env.NEXT_PUBLIC_API_URL_DEV || 'http://localhost:8000/api'
+    : process.env.NEXT_PUBLIC_API_URL || 'https://web-production-a530d.up.railway.app/api';
 
 // Types for API responses
 export interface ApiResponse<T = any> {
@@ -33,6 +39,20 @@ export interface User {
   department?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface Client {
+  id: number
+  name: string
+  email?: string
+  phone?: string
+  company?: string
+  address?: string
+  status: string
+  contract_count: number
+  invoice_count: number
+  created_at: string
+  updated_at: string
 }
 
 // Token management
@@ -82,7 +102,7 @@ class ApiClient {
     };
     
     try {
-      console.log(`zzzMaking ${options.method || 'GET'} request to:`, url);
+      console.log(`Making ${options.method || 'GET'} request to:`, url);
       const response = await fetch(url, config);
       
       if (!response.ok) {
@@ -91,16 +111,6 @@ class ApiClient {
           statusText: response.statusText,
           url: url
         });
-        
-        // Handle rate limiting
-        if (response.status === 429) {
-          const retryAfter = response.headers.get('Retry-After') || '300';
-          const minutes = Math.ceil(parseInt(retryAfter) / 60);
-          return {
-            success: false,
-            message: `Too many attempts. Please wait ${minutes} minute${minutes > 1 ? 's' : ''} before trying again.`
-          };
-        }
         
         // Handle specific HTTP errors
         if (response.status === 404) {
@@ -127,16 +137,15 @@ class ApiClient {
             message: 'Access denied. You do not have permission to perform this action.',
           };
         }
+
+        // Generic error response
+        return {
+          success: false,
+          message: 'Request failed. Please try again.',
+        };
       }
       
       const data = await response.json();
-      
-      // Log remaining rate limit for debugging
-      const remaining = response.headers.get('RateLimit-Remaining');
-      if (remaining && parseInt(remaining) < 5) {
-        console.warn(`Rate limit running low. ${remaining} requests remaining.`);
-      }
-      
       return data;
       
     } catch (error) {
@@ -279,25 +288,35 @@ class ApiClient {
     return this.get('/dashboard/stats');
   }
   
-  // Client methods
-  async getClients(): Promise<ApiResponse<any>> {
-    return this.get('/clients');
+  // Client management methods
+  async getClients(): Promise<ApiResponse<{ clients: Client[]; pagination: { total: number; page: number; limit: number; pages: number } }>> {
+    return this.get('/clients')
   }
-  
-  async getClient(id: number): Promise<ApiResponse<any>> {
-    return this.get(`/clients/${id}`);
+
+  async getClient(id: number): Promise<ApiResponse<{ client: Client }>> {
+    return this.get(`/clients/${id}`)
   }
-  
-  async createClient(clientData: any): Promise<ApiResponse<any>> {
-    return this.post('/clients', clientData);
+
+  async createClient(clientData: {
+    name: string
+    email?: string
+    phone?: string
+    company?: string
+    address?: string
+    status?: string
+  }): Promise<ApiResponse<{ client: Client }>> {
+    return this.post('/clients', clientData)
   }
-  
-  async updateClient(id: number, updates: any): Promise<ApiResponse<any>> {
-    return this.put(`/clients/${id}`, updates);
+
+  async updateClient(
+    id: number,
+    updates: Partial<Omit<Client, 'id' | 'created_at' | 'updated_at' | 'contract_count' | 'invoice_count'>>
+  ): Promise<ApiResponse<{ client: Client }>> {
+    return this.put(`/clients/${id}`, updates)
   }
-  
+
   async deleteClient(id: number): Promise<ApiResponse> {
-    return this.delete(`/clients/${id}`);
+    return this.delete(`/clients/${id}`)
   }
   
   // Invoice methods
@@ -419,7 +438,7 @@ class ApiClient {
 // Create and export the API client instance
 const apiClient = new ApiClient();
 export { apiClient };
-export default apiClient;
+export { apiClient as api };
 
 // Export the class for custom instances
 export { ApiClient };
