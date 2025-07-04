@@ -27,6 +27,7 @@ import {
   getMeetingRequestsForUser,
   updateMeetingRequest,
   deleteMeetingRequest,
+  checkSchedulingConflicts,
 } from "@/lib/meeting-request"
 import { useToast } from "@/components/ui/use-toast"
 import {
@@ -54,13 +55,28 @@ export function MeetingRequestsList() {
   const [activeTab, setActiveTab] = useState<MeetingRequestStatus | "all">("all")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [conflictDetected, setConflictDetected] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Load meeting requests
   useEffect(() => {
     if (!user) return
 
-    const userRequests = getMeetingRequestsForUser(user.id, user.role === "owner" ? "owner" : "requester")
-    setRequests(userRequests)
+    const fetchRequests = async () => {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const userRequests = await getMeetingRequestsForUser(user.id, user.role === "owner" ? "target" : "requester")
+        setRequests(userRequests)
+      } catch (error) {
+        setError("Failed to load meeting requests. Please try again.")
+        console.error("Error loading meeting requests:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchRequests()
   }, [user])
 
   // Filter requests based on active tab
@@ -75,8 +91,19 @@ export function MeetingRequestsList() {
     {} as Record<MeetingRequestStatus, number>,
   )
 
+  // Check if user can manage requests
+  const canManageRequests = user?.role === "owner"
+
   // Handle responding to a request
   const handleRespond = (request: MeetingRequest, status: MeetingRequestStatus) => {
+    if (!canManageRequests) {
+      toast({
+        title: "Permission Denied",
+        description: "Only owners can manage meeting requests.",
+        variant: "destructive",
+      })
+      return
+    }
     setSelectedRequest(request)
     setResponseMessage("")
     setScheduledDate(undefined)
@@ -85,6 +112,14 @@ export function MeetingRequestsList() {
 
   // Handle deleting a request
   const handleDelete = (request: MeetingRequest) => {
+    if (!canManageRequests) {
+      toast({
+        title: "Permission Denied",
+        description: "Only owners can delete meeting requests.",
+        variant: "destructive",
+      })
+      return
+    }
     setSelectedRequest(request)
     setDeleteDialogOpen(true)
   }
@@ -104,23 +139,9 @@ export function MeetingRequestsList() {
   }
 
   // Check for scheduling conflicts
-  const checkForConflicts = (date: Date): boolean => {
-    // This is a simplified conflict check - in a real app, you would check against
-    // a calendar database or availability service
-    const conflictingMeetings = requests.filter((req) => {
-      if (req.id === selectedRequest?.id || !req.scheduledDate) return false
-
-      const meetingDate = parseISO(req.scheduledDate)
-      const meetingEnd = addHours(meetingDate, 1) // Assuming 1 hour meetings
-
-      // Check if the new date falls within any existing meeting
-      return (
-        (date >= meetingDate && date < meetingEnd) ||
-        (addHours(date, 1) > meetingDate && addHours(date, 1) <= meetingEnd)
-      )
-    })
-
-    return conflictingMeetings.length > 0
+  const checkForConflicts = async (date: Date): Promise<boolean> => {
+    if (!selectedRequest || !user) return false
+    return checkSchedulingConflicts(user.id, date.toISOString(), 60, selectedRequest.id)
   }
 
   // Submit response
@@ -130,17 +151,12 @@ export function MeetingRequestsList() {
     setIsSubmitting(true)
 
     try {
-      const status = scheduledDate ? "scheduled" : selectedRequest.status
       const updates: Partial<MeetingRequest> = {
-        status,
+        status: "approved",
         responseMessage,
       }
 
-      if (scheduledDate) {
-        updates.scheduledDate = scheduledDate.toISOString()
-      }
-
-      const updatedRequest = updateMeetingRequest(selectedRequest.id, updates)
+      const updatedRequest = await updateMeetingRequest(selectedRequest.id, updates)
 
       if (updatedRequest) {
         // Update local state
@@ -149,7 +165,7 @@ export function MeetingRequestsList() {
         // Show success message
         toast({
           title: "Response Sent",
-          description: `You have ${status} the meeting request from ${selectedRequest.requesterName}`,
+          description: `You have ${updates.status} the meeting request from ${selectedRequest.requesterName}`,
         })
 
         // Close dialog
@@ -171,7 +187,7 @@ export function MeetingRequestsList() {
     if (!selectedRequest || !scheduledDate) return
 
     // Check for conflicts
-    if (checkForConflicts(scheduledDate)) {
+    if (await checkForConflicts(scheduledDate)) {
       setConflictDetected(true)
       return
     }
@@ -185,7 +201,7 @@ export function MeetingRequestsList() {
         responseMessage: responseMessage || `Meeting rescheduled to ${format(scheduledDate, "PPP p")}`,
       }
 
-      const updatedRequest = updateMeetingRequest(selectedRequest.id, updates)
+      const updatedRequest = await updateMeetingRequest(selectedRequest.id, updates)
 
       if (updatedRequest) {
         // Update local state
@@ -219,7 +235,7 @@ export function MeetingRequestsList() {
     setIsSubmitting(true)
 
     try {
-      const success = deleteMeetingRequest(selectedRequest.id)
+      const success = await deleteMeetingRequest(selectedRequest.id)
 
       if (success) {
         // Update local state
@@ -248,11 +264,14 @@ export function MeetingRequestsList() {
   }
 
   // Format date for display
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return "No date provided"
     try {
       const date = parseISO(dateString)
-      return isValid(date) ? format(date, "MMM d, yyyy h:mm a") : "Invalid date"
+      if (!isValid(date)) return "Invalid date"
+      return format(date, "PPP 'at' p") // e.g. "April 29, 2024 at 2:00 PM"
     } catch (error) {
+      console.error("Error formatting date:", error)
       return "Invalid date"
     }
   }
@@ -261,489 +280,199 @@ export function MeetingRequestsList() {
   const getStatusBadge = (status: MeetingRequestStatus) => {
     switch (status) {
       case "pending":
-        return (
-          <Badge variant="outline" className="bg-yellow-100 text-yellow-800">
-            Pending
-          </Badge>
-        )
+        return <Badge variant="outline">Pending</Badge>
       case "approved":
-        return (
-          <Badge variant="outline" className="bg-green-100 text-green-800">
-            Approved
-          </Badge>
-        )
-      case "scheduled":
-        return (
-          <Badge variant="outline" className="bg-blue-100 text-blue-800">
-            Scheduled
-          </Badge>
-        )
-      case "denied":
-        return (
-          <Badge variant="outline" className="bg-red-100 text-red-800">
-            Denied
-          </Badge>
-        )
+        return <Badge variant="success">Approved</Badge>
+      case "rejected":
+        return <Badge variant="destructive">Rejected</Badge>
+      case "cancelled":
+        return <Badge variant="secondary">Cancelled</Badge>
+      default:
+        return null
     }
   }
 
-  // Only show for users
-  if (!user) return null
+  // Render empty state
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 space-y-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        <p className="text-muted-foreground">Loading meeting requests...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 space-y-4">
+        <AlertCircle className="h-8 w-8 text-destructive" />
+        <p className="text-muted-foreground">{error}</p>
+      </div>
+    )
+  }
+
+  if (!requests.length) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 space-y-4">
+        <CalendarPlus className="h-8 w-8 text-muted-foreground" />
+        <p className="text-muted-foreground">No meeting requests found</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Meeting Requests</h2>
-        <p className="text-muted-foreground">
-          {user.role === "owner"
-            ? "View and respond to meeting requests from team members."
-            : "View your meeting requests and their status."}
-        </p>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">Meeting Requests</h2>
+        {canManageRequests && (
+          <Button onClick={() => window.location.href = "/schedule-meeting"}>
+            <CalendarPlus className="h-4 w-4 mr-2" />
+            Request Meeting
+          </Button>
+        )}
       </div>
 
-      <Tabs defaultValue="all" value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MeetingRequestStatus | "all")}>
         <TabsList>
           <TabsTrigger value="all">
-            All
-            <Badge variant="secondary" className="ml-2">
-              {requests.length}
-            </Badge>
+            All <Badge variant="secondary" className="ml-2">{requests.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="pending">
-            Pending
-            <Badge variant="secondary" className="ml-2">
-              {requestCounts.pending || 0}
-            </Badge>
+            Pending <Badge variant="secondary" className="ml-2">{requestCounts.pending || 0}</Badge>
           </TabsTrigger>
           <TabsTrigger value="approved">
-            Approved
-            <Badge variant="secondary" className="ml-2">
-              {requestCounts.approved || 0}
-            </Badge>
+            Approved <Badge variant="secondary" className="ml-2">{requestCounts.approved || 0}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="scheduled">
-            Scheduled
-            <Badge variant="secondary" className="ml-2">
-              {requestCounts.scheduled || 0}
-            </Badge>
+          <TabsTrigger value="rejected">
+            Rejected <Badge variant="secondary" className="ml-2">{requestCounts.rejected || 0}</Badge>
           </TabsTrigger>
-          <TabsTrigger value="denied">
-            Denied
-            <Badge variant="secondary" className="ml-2">
-              {requestCounts.denied || 0}
-            </Badge>
+          <TabsTrigger value="cancelled">
+            Cancelled <Badge variant="secondary" className="ml-2">{requestCounts.cancelled || 0}</Badge>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={activeTab} className="mt-6">
-          {filteredRequests.length > 0 ? (
-            <div className="space-y-4">
-              {filteredRequests.map((request) => (
-                <Card key={request.id}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle>{request.subject}</CardTitle>
-                        <CardDescription>
-                          {user.role === "owner"
-                            ? `Requested by ${request.requesterName}`
-                            : `Requested from ${request.ownerName}`}
-                        </CardDescription>
-                      </div>
-                      {getStatusBadge(request.status)}
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {request.description && (
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-1">Details:</h4>
-                        <p className="text-sm">{request.description}</p>
-                      </div>
-                    )}
-
-                    <div>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-1">Preferred Dates:</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {request.preferredDates.map((date) => (
-                          <Badge key={date} variant="secondary">
-                            {formatDate(date)}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {request.scheduledDate && (
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-1">Scheduled For:</h4>
-                        <Badge variant="default" className="bg-blue-500">
-                          {formatDate(request.scheduledDate)}
-                        </Badge>
-                      </div>
-                    )}
-
-                    {request.responseMessage && (
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground mb-1">Response:</h4>
-                        <p className="text-sm">{request.responseMessage}</p>
-                      </div>
-                    )}
-
-                    <div className="text-xs text-muted-foreground">Requested on {formatDate(request.createdAt)}</div>
-                  </CardContent>
-
-                  {user.role === "owner" && (
-                    <CardFooter className="flex justify-end space-x-2">
-                      {/* Show different buttons based on status */}
-                      {request.status === "pending" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                            onClick={() => {
-                              setSelectedRequest({ ...request, status: "denied" })
-                              setResponseDialogOpen(true)
-                            }}
-                          >
-                            <X className="mr-2 h-4 w-4" />
-                            Deny
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
-                            onClick={() => {
-                              setSelectedRequest({ ...request, status: "approved" })
-                              setResponseDialogOpen(true)
-                            }}
-                          >
-                            <Check className="mr-2 h-4 w-4" />
-                            Approve
-                          </Button>
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedRequest({ ...request, status: "scheduled" })
-                              setResponseDialogOpen(true)
-                            }}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            Schedule
-                          </Button>
-                        </>
-                      )}
-
-                      {/* For approved or scheduled meetings, show reschedule and delete options */}
-                      {(request.status === "approved" || request.status === "scheduled") && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
-                            onClick={() => handleDelete(request)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                            onClick={() => handleReschedule(request)}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            Reschedule
-                          </Button>
-                        </>
-                      )}
-                    </CardFooter>
+        <TabsContent value={activeTab} className="space-y-4">
+          {filteredRequests.map((request) => (
+            <Card key={request.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>{request.subject}</CardTitle>
+                    <CardDescription>
+                      Requested from {request.requesterName || "Unknown"}
+                    </CardDescription>
+                  </div>
+                  <Badge variant={request.status === "pending" ? "default" : request.status === "approved" ? "success" : "destructive"}>
+                    {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {request.description && (
+                  <div>
+                    <Label>Details:</Label>
+                    <p className="text-sm text-muted-foreground">{request.description}</p>
+                  </div>
+                )}
+                <div>
+                  <Label>Proposed Date & Time:</Label>
+                  <p className="text-sm text-muted-foreground">{formatDate(request.proposedDateTime)}</p>
+                </div>
+                <div>
+                  <Label>Requested on:</Label>
+                  <p className="text-sm text-muted-foreground">{formatDate(request.createdAt)}</p>
+                </div>
+                {request.responseMessage && (
+                  <div>
+                    <Label>Response:</Label>
+                    <p className="text-sm text-muted-foreground">{request.responseMessage}</p>
+                  </div>
+                )}
+              </CardContent>
+              {canManageRequests && (
+                <CardFooter className="flex justify-end space-x-2">
+                  {request.status === "pending" && (
+                    <>
+                      <Button
+                        variant="default"
+                        onClick={() => handleRespond(request, "approved")}
+                        disabled={isSubmitting}
+                      >
+                        <Check className="h-4 w-4 mr-2" />
+                        Approve
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => handleRespond(request, "rejected")}
+                        disabled={isSubmitting}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Reject
+                      </Button>
+                    </>
                   )}
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-10">
-              <Clock className="mx-auto h-12 w-12 text-muted-foreground/50" />
-              <h3 className="mt-4 text-lg font-medium">No meeting requests</h3>
-              <p className="mt-2 text-muted-foreground">
-                {activeTab === "all"
-                  ? "You don't have any meeting requests yet."
-                  : `You don't have any ${activeTab} meeting requests.`}
-              </p>
-            </div>
-          )}
+                  {(request.status === "pending" || request.status === "approved") && (
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDelete(request)}
+                      disabled={isSubmitting}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  )}
+                </CardFooter>
+              )}
+            </Card>
+          ))}
         </TabsContent>
       </Tabs>
 
       {/* Response Dialog */}
       <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {selectedRequest?.status === "denied"
-                ? "Deny Meeting Request"
-                : selectedRequest?.status === "approved"
-                  ? "Approve Meeting Request"
-                  : "Schedule Meeting"}
-            </DialogTitle>
+            <DialogTitle>Respond to Meeting Request</DialogTitle>
             <DialogDescription>
-              {selectedRequest?.status === "denied"
-                ? "Provide a reason for denying this meeting request."
-                : selectedRequest?.status === "approved"
-                  ? "Approve this meeting request and provide any additional information."
-                  : "Schedule this meeting and provide details."}
+              {selectedRequest?.status === "approved"
+                ? "Approve this meeting request and send a response to the requester."
+                : "Reject this meeting request and provide a reason to the requester."}
             </DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {selectedRequest?.status === "scheduled" && (
-              <div className="space-y-2">
-                <Label htmlFor="scheduledDate">Meeting Date & Time *</Label>
-                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button id="scheduledDate" variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {scheduledDate ? format(scheduledDate, "PPP p") : "Select date and time"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={scheduledDate}
-                      onSelect={(date) => {
-                        if (date) {
-                          // Set time to noon by default
-                          const newDate = new Date(date)
-                          newDate.setHours(12, 0, 0, 0)
-                          setScheduledDate(newDate)
-
-                          // Close calendar after selection
-                          setCalendarOpen(false)
-
-                          // Focus time input
-                          setTimeout(() => {
-                            document.getElementById("scheduledTime")?.focus()
-                          }, 100)
-                        }
-                      }}
-                      disabled={(date) => date < new Date()}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                {scheduledDate && (
-                  <div className="mt-2">
-                    <Label htmlFor="scheduledTime">Time</Label>
-                    <Input
-                      id="scheduledTime"
-                      type="time"
-                      value={scheduledDate ? format(scheduledDate, "HH:mm") : ""}
-                      onChange={(e) => {
-                        if (scheduledDate && e.target.value) {
-                          const [hours, minutes] = e.target.value.split(":").map(Number)
-                          const newDate = new Date(scheduledDate)
-                          newDate.setHours(hours, minutes)
-                          setScheduledDate(newDate)
-                        }
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="responseMessage">Message</Label>
+          <div className="space-y-4">
+            <div>
+              <Label>Response Message (Optional)</Label>
               <Textarea
-                id="responseMessage"
                 value={responseMessage}
                 onChange={(e) => setResponseMessage(e.target.value)}
-                placeholder={
-                  selectedRequest?.status === "denied"
-                    ? "Provide a reason for denying this request..."
-                    : selectedRequest?.status === "approved"
-                      ? "Add any additional information..."
-                      : "Add meeting details, agenda, or instructions..."
-                }
-                rows={4}
+                placeholder="Enter your response..."
               />
             </div>
           </div>
-
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setResponseDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setResponseDialogOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button
-              onClick={submitResponse}
-              disabled={isSubmitting || (selectedRequest?.status === "scheduled" && !scheduledDate)}
-              className={
-                selectedRequest?.status === "denied"
-                  ? "bg-red-600 hover:bg-red-700"
-                  : selectedRequest?.status === "approved"
-                    ? "bg-green-600 hover:bg-green-700"
-                    : ""
-              }
-            >
-              {isSubmitting
-                ? "Sending..."
-                : selectedRequest?.status === "denied"
-                  ? "Deny Request"
-                  : selectedRequest?.status === "approved"
-                    ? "Approve Request"
-                    : "Schedule Meeting"}
+            <Button onClick={submitResponse} disabled={isSubmitting}>
+              {isSubmitting ? "Sending..." : "Send Response"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Reschedule Dialog */}
-      <Dialog
-        open={rescheduleDialogOpen}
-        onOpenChange={(open) => {
-          setRescheduleDialogOpen(open)
-          if (!open) setConflictDetected(false)
-        }}
-      >
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Reschedule Meeting</DialogTitle>
-            <DialogDescription>Select a new date and time for this meeting.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="rescheduledDate">New Meeting Date & Time *</Label>
-              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button id="rescheduledDate" variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {scheduledDate ? format(scheduledDate, "PPP p") : "Select date and time"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={scheduledDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        // Keep current time if available
-                        const newDate = new Date(date)
-                        if (scheduledDate) {
-                          newDate.setHours(scheduledDate.getHours(), scheduledDate.getMinutes(), 0, 0)
-                        } else {
-                          newDate.setHours(12, 0, 0, 0)
-                        }
-                        setScheduledDate(newDate)
-                        setConflictDetected(false)
-
-                        // Close calendar after selection
-                        setCalendarOpen(false)
-
-                        // Focus time input
-                        setTimeout(() => {
-                          document.getElementById("rescheduledTime")?.focus()
-                        }, 100)
-                      }
-                    }}
-                    disabled={(date) => isBefore(date, new Date()) && !isSameDay(date, new Date())}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-
-              {scheduledDate && (
-                <div className="mt-2">
-                  <Label htmlFor="rescheduledTime">Time</Label>
-                  <Input
-                    id="rescheduledTime"
-                    type="time"
-                    value={scheduledDate ? format(scheduledDate, "HH:mm") : ""}
-                    onChange={(e) => {
-                      if (scheduledDate && e.target.value) {
-                        const [hours, minutes] = e.target.value.split(":").map(Number)
-                        const newDate = new Date(scheduledDate)
-                        newDate.setHours(hours, minutes)
-                        setScheduledDate(newDate)
-                        setConflictDetected(false)
-                      }
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {conflictDetected && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 flex items-start">
-                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" />
-                <div>
-                  <h4 className="text-sm font-medium text-yellow-800">Scheduling Conflict Detected</h4>
-                  <p className="text-sm text-yellow-700 mt-1">
-                    The selected time conflicts with another scheduled meeting. Please select a different time.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="rescheduleMessage">Message (Optional)</Label>
-              <Textarea
-                id="rescheduleMessage"
-                value={responseMessage}
-                onChange={(e) => setResponseMessage(e.target.value)}
-                placeholder="Add a message about why the meeting is being rescheduled..."
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setRescheduleDialogOpen(false)
-                setConflictDetected(false)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={submitReschedule}
-              disabled={isSubmitting || !scheduledDate}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {isSubmitting ? "Rescheduling..." : "Reschedule Meeting"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Meeting Request</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete this meeting request? This action cannot be undone.
-              {selectedRequest?.status === "scheduled" && (
-                <div className="mt-2 font-medium text-red-600">
-                  This will cancel the scheduled meeting on{" "}
-                  {selectedRequest.scheduledDate ? formatDate(selectedRequest.scheduledDate) : "the scheduled date"}.
-                </div>
-              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteDialogOpen(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={submitDelete}
-              disabled={isSubmitting}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
-              {isSubmitting ? "Deleting..." : "Delete Meeting"}
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={submitDelete} disabled={isSubmitting}>
+              {isSubmitting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

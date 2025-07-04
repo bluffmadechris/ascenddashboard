@@ -19,22 +19,20 @@ import type { RecurrenceRule } from "@/lib/calendar-utils"
 interface AvailabilityDetailModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  date: Date
-  endDate?: Date
+  date: Date | null
+  endDate: Date | null
   isAvailable: boolean
+  startTime: string
+  endTime: string
+  note?: string
+  recurrence?: RecurrenceRule | null
   onSave: (data: {
     isAvailable: boolean
-    startDate: Date
-    endDate: Date
     startTime: string
     endTime: string
-    note: string
-    recurrence?: RecurrenceRule
+    note?: string
+    recurrence?: RecurrenceRule | null
   }) => void
-  defaultStartTime?: string
-  defaultEndTime?: string
-  note?: string
-  recurrence?: RecurrenceRule
 }
 
 export function AvailabilityDetailModal({
@@ -42,216 +40,101 @@ export function AvailabilityDetailModal({
   onOpenChange,
   date,
   endDate,
-  isAvailable: initialIsAvailable,
-  onSave,
-  defaultStartTime = "09:00",
-  defaultEndTime = "17:00",
+  isAvailable,
+  startTime,
+  endTime,
   note = "",
-  recurrence,
+  recurrence = null,
+  onSave,
 }: AvailabilityDetailModalProps) {
-  const [isAvailable, setIsAvailable] = useState(initialIsAvailable)
-  const [startDate, setStartDate] = useState<Date>(date)
-  const [selectedEndDate, setSelectedEndDate] = useState<Date>(endDate || date)
-  const [startTime, setStartTime] = useState(defaultStartTime)
-  const [endTime, setEndTime] = useState(defaultEndTime)
-  const [noteText, setNoteText] = useState(note)
-  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule | undefined>(recurrence)
-  const [isTimeValid, setIsTimeValid] = useState(true)
-  const [isDateRangeValid, setIsDateRangeValid] = useState(true)
+  // Local state for form values
+  const [localIsAvailable, setLocalIsAvailable] = useState(isAvailable)
+  const [localStartTime, setLocalStartTime] = useState(startTime)
+  const [localEndTime, setLocalEndTime] = useState(endTime)
+  const [localNote, setLocalNote] = useState(note)
+  const [localRecurrence, setLocalRecurrence] = useState<RecurrenceRule | null>(recurrence)
 
-  const [startCalendarOpen, setStartCalendarOpen] = useState(false)
-  const [endCalendarOpen, setEndCalendarOpen] = useState(false)
-
-  // Reset form when modal opens
+  // Update local state when props change
   useEffect(() => {
-    if (open) {
-      setIsAvailable(initialIsAvailable)
-      setStartDate(date)
-      setSelectedEndDate(endDate || date)
-      setStartTime(defaultStartTime)
-      setEndTime(defaultEndTime)
-      setNoteText(note)
-      setRecurrenceRule(recurrence)
-    }
-  }, [open, initialIsAvailable, date, endDate, defaultStartTime, defaultEndTime, note, recurrence])
+    setLocalIsAvailable(isAvailable)
+    setLocalStartTime(startTime)
+    setLocalEndTime(endTime)
+    setLocalNote(note)
+    setLocalRecurrence(recurrence)
+  }, [isAvailable, startTime, endTime, note, recurrence])
 
-  // Validate time range
-  useEffect(() => {
-    setIsTimeValid(startTime < endTime)
-  }, [startTime, endTime])
-
-  // Validate date range
-  useEffect(() => {
-    setIsDateRangeValid(!isBefore(selectedEndDate, startDate))
-  }, [startDate, selectedEndDate])
-
+  // Handle save
   const handleSave = () => {
-    if (!isTimeValid || !isDateRangeValid) return
-
     onSave({
-      isAvailable,
-      startDate,
-      endDate: selectedEndDate,
-      startTime,
-      endTime,
-      note: noteText,
-      recurrence: recurrenceRule,
+      isAvailable: localIsAvailable,
+      startTime: localStartTime,
+      endTime: localEndTime,
+      note: localNote,
+      recurrence: localRecurrence,
     })
-
-    onOpenChange(false)
   }
+
+  // If no date is provided, don't render
+  if (!date) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>
-            Availability for {format(startDate, "EEEE, MMMM d, yyyy")}
-            {!isBefore(selectedEndDate, startDate) && startDate.getTime() !== selectedEndDate.getTime() && (
-              <> to {format(selectedEndDate, "EEEE, MMMM d, yyyy")}</>
-            )}
+            Availability for {format(date, "EEEE, MMMM d, yyyy")}
           </DialogTitle>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {/* Availability toggle */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="availability-toggle" className="text-base">
-              {isAvailable ? "Available" : "Unavailable"}
-            </Label>
-            <Switch id="availability-toggle" checked={isAvailable} onCheckedChange={setIsAvailable} />
-          </div>
-
-          {/* Date Range Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="start-date">Start Date</Label>
-              <Popover open={startCalendarOpen} onOpenChange={setStartCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="start-date"
-                    variant="outline"
-                    className={cn("w-full justify-start text-left font-normal", !startDate && "text-muted-foreground")}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : "Select date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={startDate}
-                    onSelect={(date) => {
-                      if (date) {
-                        setStartDate(date)
-                        // If end date is before new start date, update it
-                        if (isBefore(selectedEndDate, date)) {
-                          setSelectedEndDate(date)
-                        }
-                      }
-                      setStartCalendarOpen(false)
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="end-date">End Date</Label>
-              <Popover open={endCalendarOpen} onOpenChange={setEndCalendarOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    id="end-date"
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !selectedEndDate && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedEndDate ? format(selectedEndDate, "PPP") : "Select date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={selectedEndDate}
-                    onSelect={(date) => {
-                      if (date) setSelectedEndDate(date)
-                      setEndCalendarOpen(false)
-                    }}
-                    disabled={(date) => isBefore(date, startDate)}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-
-          {!isDateRangeValid && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>End date must be on or after start date</AlertDescription>
-            </Alert>
-          )}
-
-          {isAvailable && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="start-time">Start Time</Label>
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="start-time"
-                      type="time"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end-time">End Time</Label>
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-
-              {!isTimeValid && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>End time must be after start time</AlertDescription>
-                </Alert>
-              )}
-            </>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="note">Note</Label>
-            <Textarea
-              id="note"
-              placeholder="Add a note about your availability (optional)"
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              rows={3}
+            <Label htmlFor="availability">Available</Label>
+            <Switch
+              id="availability"
+              checked={localIsAvailable}
+              onCheckedChange={setLocalIsAvailable}
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Recurrence</Label>
-            <RecurrenceEditor recurrence={recurrenceRule} onChange={setRecurrenceRule} startDate={startDate} />
+          {/* Time inputs */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="startTime">Start Time</Label>
+              <Input
+                id="startTime"
+                type="time"
+                value={localStartTime}
+                onChange={(e) => setLocalStartTime(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="endTime">End Time</Label>
+              <Input
+                id="endTime"
+                type="time"
+                value={localEndTime}
+                onChange={(e) => setLocalEndTime(e.target.value)}
+              />
+            </div>
           </div>
-        </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+          {/* Note */}
+          <div className="grid gap-2">
+            <Label htmlFor="note">Note (optional)</Label>
+            <Textarea
+              id="note"
+              value={localNote}
+              onChange={(e) => setLocalNote(e.target.value)}
+              placeholder="Add a note about this availability..."
+            />
+          </div>
+
+          {/* Save button */}
+          <Button onClick={handleSave} className="w-full">
+            Save Availability
           </Button>
-          <Button onClick={handleSave} disabled={(isAvailable && !isTimeValid) || !isDateRangeValid}>
-            Save
-          </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )

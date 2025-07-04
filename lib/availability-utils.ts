@@ -2,7 +2,6 @@
 
 import { format } from "date-fns"
 import { loadUserAvailability } from "./calendar-utils"
-import { useAuth } from "@/lib/auth-context"
 
 export interface AvailabilityConflict {
   userId: string
@@ -15,11 +14,9 @@ export function checkUsersAvailability(
   userIds: string[],
   startTime: Date,
   endTime: Date,
+  users: any[],
 ): { available: boolean; conflicts: AvailabilityConflict[] } {
   const conflicts: AvailabilityConflict[] = []
-
-  // Get all users from auth context
-  const { users } = useAuth()
 
   // Check each user's availability
   userIds.forEach((userId) => {

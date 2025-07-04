@@ -219,30 +219,99 @@ export function saveCalendarCategories(categories: CalendarCategory[]): void {
   }
 }
 
-// Load user availability (keeping localStorage for now as not in API)
-export function loadUserAvailability(userId: string): Availability | null {
-  try {
-    const availability = JSON.parse(localStorage.getItem(`ascend-media-availability-${userId}`) || "null")
+// Get default availability
+export function getDefaultAvailability(userId: string): Availability {
+  return {
+    userId,
+    dates: [], // Start with empty dates array
+    defaultStartTime: "09:00",
+    defaultEndTime: "17:00",
+    unavailableSlots: [],
+  }
+}
 
+// Load user availability (keeping localStorage for now as not in API)
+export function loadUserAvailability(userId: string): Availability {
+  try {
+    const storedAvailability = localStorage.getItem(`ascend-media-availability-${userId}`)
+    if (!storedAvailability) {
+      // If no stored availability, return default
+      const defaultAvail = getDefaultAvailability(userId)
+      saveUserAvailability(defaultAvail)
+      return defaultAvail
+    }
+
+    const availability = JSON.parse(storedAvailability)
     // Add unavailableSlots array if it doesn't exist (backward compatibility)
-    if (availability && !availability.unavailableSlots) {
+    if (!availability.unavailableSlots) {
       availability.unavailableSlots = []
     }
 
-    return availability ? (availability as Availability) : null
+    return availability as Availability
   } catch (error) {
     console.error("Error loading user availability:", error)
-    return null
+    // Return default availability on error
+    const defaultAvail = getDefaultAvailability(userId)
+    saveUserAvailability(defaultAvail)
+    return defaultAvail
   }
 }
 
 // Save user availability (keeping localStorage for now)
 export function saveUserAvailability(availability: Availability): void {
   try {
+    if (!availability.userId) {
+      console.error("Attempted to save availability without userId")
+      return
+    }
     localStorage.setItem(`ascend-media-availability-${availability.userId}`, JSON.stringify(availability))
   } catch (error) {
     console.error("Error saving user availability:", error)
   }
+}
+
+// Check if a date is available
+export function isDateAvailable(userId: string, date: Date): boolean {
+  const availability = loadUserAvailability(userId)
+  const dateStr = format(date, "yyyy-MM-dd")
+  const dateAvail = availability.dates.find((d) => d.date === dateStr)
+  return dateAvail ? dateAvail.available : true // Default to available if no entry
+}
+
+// Toggle date availability
+export function toggleDateAvailability(userId: string, date: Date): { available: boolean } {
+  const availability = loadUserAvailability(userId)
+  const dateStr = format(date, "yyyy-MM-dd")
+  const updatedDates = [...availability.dates]
+  const existingIndex = updatedDates.findIndex((d) => d.date === dateStr)
+
+  let newAvailable: boolean
+
+  if (existingIndex !== -1) {
+    // Toggle existing date
+    newAvailable = !updatedDates[existingIndex].available
+    updatedDates[existingIndex] = {
+      ...updatedDates[existingIndex],
+      available: newAvailable,
+    }
+  } else {
+    // Create new date entry as unavailable (since we're toggling from the default available state)
+    newAvailable = false
+    updatedDates.push({
+      date: dateStr,
+      available: newAvailable,
+      startTime: availability.defaultStartTime,
+      endTime: availability.defaultEndTime,
+    })
+  }
+
+  // Save updated availability
+  saveUserAvailability({
+    ...availability,
+    dates: updatedDates,
+  })
+
+  return { available: newAvailable }
 }
 
 // Create a new unavailable time slot
@@ -908,36 +977,6 @@ export async function getUserEvents(userId: string): Promise<CalendarEvent[]> {
   } catch (error) {
     console.error("Error getting user events:", error)
     return []
-  }
-}
-
-// Get default availability for a new user
-export function getDefaultAvailability(userId: string): Availability {
-  // Create availability for the next 30 days
-  const dates: DateAvailability[] = []
-  const today = new Date()
-
-  for (let i = 0; i < 30; i++) {
-    const date = addDays(today, i)
-    const dayOfWeek = date.getDay()
-
-    // Default to available on weekdays (Monday-Friday)
-    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5
-
-    dates.push({
-      date: format(date, "yyyy-MM-dd"),
-      available: isWeekday,
-      startTime: "09:00",
-      endTime: "17:00",
-    })
-  }
-
-  return {
-    userId,
-    dates,
-    defaultStartTime: "09:00",
-    defaultEndTime: "17:00",
-    unavailableSlots: [], // Initialize empty unavailable slots array
   }
 }
 

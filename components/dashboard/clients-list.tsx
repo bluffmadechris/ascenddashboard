@@ -10,7 +10,7 @@ import { apiClient } from "@/lib/api-client"
 import { AddClientForm } from "./add-client-form"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MoreHorizontal, Trash } from "lucide-react"
+import { MoreHorizontal, Trash, Edit } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +28,8 @@ import {
 import { loadData, saveData } from "@/lib/data-persistence"
 import { useToast } from "@/components/ui/use-toast"
 import Link from "next/link"
+import { EditClientDialog } from "./edit-client-dialog"
+import { useAuth } from "@/lib/auth-context"
 
 interface Client {
   id: string
@@ -46,11 +48,16 @@ interface ClientsListProps {
 
 export function ClientsList({ initialClients = [], onClientDelete }: ClientsListProps) {
   const router = useRouter()
+  const { user } = useAuth()
   const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
   const { toast } = useToast()
+
+  const isOwner = user?.role === "owner"
 
   const loadClients = useCallback(() => {
     const defaultClients: Record<string, Client> = {
@@ -240,27 +247,47 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
                   <TableCell>{client.industry}</TableCell>
                   <TableCell>
                     <div className="flex items-center">
-                      <div className={`h-2 w-2 rounded-full mr-2 ${client.status === "Active" ? "bg-green-500" : "bg-gray-500"
-                        }`} />
+                      <div
+                        className={`h-2 w-2 rounded-full mr-2 ${client.status === "Active"
+                            ? "bg-green-500"
+                            : client.status === "Paused"
+                              ? "bg-yellow-500"
+                              : "bg-gray-500"
+                          }`}
+                      />
                       {client.status}
                     </div>
                   </TableCell>
                   <TableCell>{client.projects}</TableCell>
                   <TableCell>{client.totalSpent}</TableCell>
                   <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(client.id)}>
-                          <Trash className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {isOwner && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedClient(client)
+                              setEditDialogOpen(true)
+                            }}
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => handleDelete(client.id)}
+                          >
+                            <Trash className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -268,6 +295,15 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
           </Table>
         )}
       </CardContent>
+
+      {selectedClient && (
+        <EditClientDialog
+          client={selectedClient}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSave={loadClients}
+        />
+      )}
     </Card>
   )
 }

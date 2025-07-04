@@ -53,6 +53,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -63,9 +64,11 @@
     transform: rotate(215deg) translateX(0);
     opacity: 1;
   }
+
   70% {
     opacity: 1;
   }
+
   100% {
     transform: rotate(215deg) translateX(-500px);
     opacity: 0;
@@ -77,18 +80,6 @@
   animation: meteor linear infinite;
   transform: rotate(215deg);
   box-shadow: 0 0 15px 3px rgba(59, 130, 246, 0.4);
-}
-
-.sidebar-item {
-  @apply flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground relative;
-}
-
-.sidebar-item.active {
-  @apply bg-accent text-accent-foreground font-medium;
-}
-
-.sidebar-item-icon {
-  @apply h-5 w-5 flex-shrink-0 text-muted-foreground group-hover:text-current;
 }
 
 .bg-dashboard {

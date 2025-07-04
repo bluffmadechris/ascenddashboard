@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context"
 import { useDisplayTitle } from "@/lib/display-title-context"
 import { TeamMemberCard } from "@/components/dashboard/team-member-card"
 import { RequestMeetingButton } from "@/components/dashboard/request-meeting-button"
-import { loadData } from "@/lib/data-persistence"
+import { loadData, saveData } from "@/lib/data-persistence"
 import { TeamMemberCalendar } from "@/components/calendar/team-member-calendar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Search, Users, Calendar, Filter, Crown, Building, Palette, GitBranch } from "lucide-react"
@@ -32,7 +32,7 @@ export default function TeamPage() {
 
   // Load visibility states from local storage
   useEffect(() => {
-    const savedStates = loadData("team-visibility-states", {})
+    const savedStates = loadData("team-visibility-states") || {}
     setVisibilityStates(savedStates)
   }, [])
 
@@ -43,7 +43,7 @@ export default function TeamPage() {
       [userId]: !visibilityStates[userId],
     }
     setVisibilityStates(newStates)
-    loadData("team-visibility-states", newStates)
+    saveData("team-visibility-states", newStates)
   }
 
   // Filter users based on search query and role filter

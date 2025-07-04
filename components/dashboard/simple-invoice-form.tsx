@@ -23,6 +23,7 @@ type InvoiceItem = {
   id: string
   description: string
   quantity: number
+  rate: number
   amount: number
 }
 
@@ -43,7 +44,7 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
   const [initialStatus, setInitialStatus] = useState("draft")
 
   // Items and calculations
-  const [items, setItems] = useState<InvoiceItem[]>([{ id: uuidv4(), description: "", quantity: 1, amount: 0 }])
+  const [items, setItems] = useState<InvoiceItem[]>([{ id: uuidv4(), description: "", quantity: 1, rate: 0, amount: 0 }])
   const [total, setTotal] = useState(0)
 
   // Check if user is owner
@@ -57,15 +58,35 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
     }
   }, [isOwner])
 
-  // Calculate total
+  // Calculate total and item amounts
+  const calculateAmount = (quantity: number, rate: number) => {
+    return Number((quantity * rate).toFixed(2))
+  }
+
+  // Update item amounts when quantity or rate changes
+  const updateItemAmount = (id: string, quantity: number, rate: number) => {
+    setItems(items.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          quantity,
+          rate,
+          amount: calculateAmount(quantity, rate)
+        }
+      }
+      return item
+    }))
+  }
+
+  // Calculate total whenever items change
   useEffect(() => {
     const newTotal = items.reduce((sum, item) => sum + item.amount, 0)
-    setTotal(newTotal)
+    setTotal(Number(newTotal.toFixed(2)))
   }, [items])
 
   // Add a new item
   const addItem = () => {
-    setItems([...items, { id: uuidv4(), description: "", quantity: 1, amount: 0 }])
+    setItems([...items, { id: uuidv4(), description: "", quantity: 1, rate: 0, amount: 0 }])
   }
 
   // Remove an item
@@ -120,9 +141,11 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
         issue_date: invoiceDate.toISOString().split('T')[0],
         due_date: new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from issue
         description: invoiceName,
+        created_by_name: user?.name || "Unknown",
         items: items.map(item => ({
           description: item.description,
           quantity: item.quantity,
+          rate: item.rate,
           amount: item.amount
         }))
       }
@@ -162,7 +185,7 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
       // Reset form
       setInvoiceName("")
       setInitialStatus("draft")
-      setItems([{ id: uuidv4(), description: "", quantity: 1, amount: 0 }])
+      setItems([{ id: uuidv4(), description: "", quantity: 1, rate: 0, amount: 0 }])
 
       // Call the callback if provided
       if (onSubmit) {
@@ -202,7 +225,7 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="invoiceName">Invoice Name</Label>
               <Input
                 id="invoiceName"
@@ -211,20 +234,28 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
                 placeholder="Enter invoice name"
               />
             </div>
-            <div className="space-y-2">
+            <div>
               <Label>Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    variant={"outline"}
-                    className={cn("w-full justify-start text-left font-normal", !invoiceDate && "text-muted-foreground")}
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !invoiceDate && "text-muted-foreground"
+                    )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {invoiceDate ? format(invoiceDate, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={invoiceDate} onSelect={(date) => date && setInvoiceDate(date)} />
+                  <Calendar
+                    mode="single"
+                    selected={invoiceDate}
+                    onSelect={(date) => date && setInvoiceDate(date)}
+                    initialFocus
+                  />
                 </PopoverContent>
               </Popover>
             </div>
@@ -247,78 +278,91 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
           )}
 
           <div className="space-y-4">
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <Label>Items</Label>
               <Button type="button" variant="outline" size="sm" onClick={addItem}>
-                <Plus className="h-4 w-4 mr-1" />
+                <Plus className="mr-2 h-4 w-4" />
                 Add Item
               </Button>
             </div>
             {items.map((item, index) => (
-              <div key={item.id} className="grid grid-cols-[1fr,auto,auto,auto] gap-2 items-end">
-                <div>
-                  <Label htmlFor={`description-${index}`}>Description</Label>
+              <div key={item.id} className="grid grid-cols-12 gap-2 items-start">
+                <div className="col-span-5">
                   <Input
-                    id={`description-${index}`}
+                    placeholder="Item description"
                     value={item.description}
                     onChange={(e) =>
                       setItems(
-                        items.map((i) => (i.id === item.id ? { ...i, description: e.target.value } : i)),
+                        items.map((i) =>
+                          i.id === item.id ? { ...i, description: e.target.value } : i
+                        )
                       )
                     }
                   />
                 </div>
-                <div>
-                  <Label htmlFor={`quantity-${index}`}>Quantity</Label>
+                <div className="col-span-2">
                   <Input
-                    id={`quantity-${index}`}
                     type="number"
                     min="1"
+                    placeholder="Qty"
                     value={item.quantity}
-                    onChange={(e) =>
-                      setItems(
-                        items.map((i) =>
-                          i.id === item.id ? { ...i, quantity: parseInt(e.target.value) || 0 } : i,
-                        ),
-                      )
-                    }
-                    className="w-24"
+                    onChange={(e) => {
+                      const quantity = Number(e.target.value)
+                      updateItemAmount(item.id, quantity, item.rate)
+                    }}
                   />
                 </div>
-                <div>
-                  <Label htmlFor={`amount-${index}`}>Amount</Label>
+                <div className="col-span-2">
                   <Input
-                    id={`amount-${index}`}
                     type="number"
                     min="0"
                     step="0.01"
-                    value={item.amount}
-                    onChange={(e) =>
-                      setItems(
-                        items.map((i) =>
-                          i.id === item.id ? { ...i, amount: parseFloat(e.target.value) || 0 } : i,
-                        ),
-                      )
-                    }
-                    className="w-24"
+                    placeholder="Rate"
+                    value={item.rate}
+                    onChange={(e) => {
+                      const rate = Number(e.target.value)
+                      updateItemAmount(item.id, item.quantity, rate)
+                    }}
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeItem(item.id)}
-                  className="mb-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="col-span-2">
+                  <Input
+                    type="number"
+                    readOnly
+                    value={item.amount.toFixed(2)}
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="col-span-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeItem(item.id)}
+                    disabled={items.length === 1}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
 
-          <div className="flex justify-between items-center font-medium">
-            <span>Total Amount:</span>
-            <span>${total.toFixed(2)}</span>
+          <div className="flex justify-end space-x-4 text-right">
+            <div>
+              <div className="mb-2">
+                <span className="text-sm text-muted-foreground">Subtotal:</span>
+                <span className="ml-2">${total.toFixed(2)}</span>
+              </div>
+              <div className="mb-2">
+                <span className="text-sm text-muted-foreground">Tax (0%):</span>
+                <span className="ml-2">$0.00</span>
+              </div>
+              <div>
+                <span className="font-medium">Total:</span>
+                <span className="ml-2">${total.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
 
           <DialogFooter>

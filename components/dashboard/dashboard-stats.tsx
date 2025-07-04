@@ -36,8 +36,8 @@ export function DashboardStats() {
   const isOwner = user?.role === "owner"
 
   // Load data
-  const clients = loadData("clients", {})
-  const strikes = loadData("strikes", []) as Strike[]
+  const clients = loadData<SimpleClient[]>("clients", [])
+  const strikes = loadData<Strike[]>("strikes", []) as Strike[]
 
   // Calculate strike statistics using users from auth context
   const activeStrikes = users.reduce((acc, user) => {
@@ -163,7 +163,7 @@ export function DashboardStats() {
               <Briefcase className="h-8 w-8 text-primary" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Clients</p>
-                <h3 className="text-2xl font-bold">{Object.keys(clients).length}</h3>
+                <h3 className="text-2xl font-bold">{loadData<SimpleClient[]>("clients", []).length}</h3>
               </div>
             </div>
           </CardContent>
@@ -208,7 +208,7 @@ export function DashboardStats() {
               <Briefcase className="h-8 w-8 text-primary" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Active Clients</p>
-                <h3 className="text-2xl font-bold">{Object.keys(clients).length}</h3>
+                <h3 className="text-2xl font-bold">{loadData<SimpleClient[]>("clients", []).length}</h3>
               </div>
             </div>
           </CardContent>

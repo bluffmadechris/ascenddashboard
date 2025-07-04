@@ -1,12 +1,12 @@
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { toast } from "@/components/ui/use-toast"
+import { format } from "date-fns"
 
 // Define invoice item type
 type InvoiceItem = {
   description: string
-  quantity?: number
-  hours?: number
+  quantity: number
   rate: string
   amount: string
 }
@@ -15,10 +15,9 @@ type InvoiceItem = {
 type Invoice = {
   id: string
   name?: string
-  clientName: string
-  clientId: string
-  date: string
-  dueDate: string
+  fromName: string
+  date: string | Date
+  dueDate: string | Date
   status: string
   items: InvoiceItem[]
   subtotal: string
@@ -32,6 +31,19 @@ type Invoice = {
 }
 
 /**
+ * Format a date string or Date object to a readable format
+ */
+const formatDate = (date: string | Date): string => {
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date
+    return format(dateObj, 'MMM dd, yyyy')
+  } catch (error) {
+    console.error('Error formatting date:', error)
+    return typeof date === 'string' ? date : date.toLocaleDateString()
+  }
+}
+
+/**
  * Generate and download a PDF for an invoice
  */
 export const generateInvoicePDF = async (rawInvoice: any): Promise<boolean> => {
@@ -39,16 +51,14 @@ export const generateInvoicePDF = async (rawInvoice: any): Promise<boolean> => {
   const invoice: Invoice = {
     id: rawInvoice.id ?? rawInvoice.invoice_number ?? 'N/A',
     name: rawInvoice.name ?? rawInvoice.description ?? 'Invoice',
-    clientName: rawInvoice.clientName ?? rawInvoice.client_name ?? 'Unknown Client',
-    clientId: rawInvoice.clientId ?? String(rawInvoice.client_id ?? 'N/A'),
-    date: rawInvoice.date ?? rawInvoice.issue_date ?? new Date().toLocaleDateString(),
-    dueDate: rawInvoice.dueDate ?? rawInvoice.due_date ?? rawInvoice.issue_date ?? new Date().toLocaleDateString(),
+    fromName: rawInvoice.createdByName ?? rawInvoice.created_by_name ?? 'Unknown',
+    date: rawInvoice.date ?? rawInvoice.issue_date ?? new Date(),
+    dueDate: rawInvoice.dueDate ?? rawInvoice.due_date ?? rawInvoice.issue_date ?? new Date(),
     status: rawInvoice.status ?? 'draft',
     items: (rawInvoice.items ?? []).map((item: any) => ({
       description: item.description,
-      quantity: item.quantity,
-      hours: item.hours,
-      rate: item.rate ?? String(item.amount / (item.quantity || item.hours || 1) ?? 0),
+      quantity: item.quantity ?? 1,
+      rate: typeof item.rate === 'number' ? item.rate.toFixed(2) : String(item.rate ?? 0),
       amount: typeof item.amount === 'number' ? item.amount.toFixed(2) : String(item.amount),
     })),
     subtotal: rawInvoice.subtotal ?? (typeof rawInvoice.amount === 'number' ? rawInvoice.amount.toFixed(2) : String(rawInvoice.amount)),
@@ -68,124 +78,83 @@ export const generateInvoicePDF = async (rawInvoice: any): Promise<boolean> => {
     // Initialize autoTable plugin
     autoTable(doc, {})
 
-    // Add company logo/header
-    doc.setFontSize(20)
-    doc.setTextColor(44, 62, 80) // Dark blue color
-    doc.text("Ascend Media", 20, 20)
-
-    // Add invoice details
-    doc.setFontSize(10)
+    // Add sender name
+    doc.setFontSize(14)
     doc.setTextColor(0, 0, 0)
-    doc.text("123 Business Street", 20, 30)
-    doc.text("Suite 100", 20, 35)
-    doc.text("New York, NY 10001", 20, 40)
-    doc.text("contact@ascendmedia.com", 20, 45)
+    doc.text(invoice.fromName, 20, 20)
 
-    // Add invoice number and date
-    doc.setFontSize(16)
-    doc.setTextColor(44, 62, 80)
-    doc.text(`Invoice: ${invoice.id}`, 140, 20)
-    doc.setFontSize(10)
-    doc.text(`Date: ${invoice.date}`, 140, 30)
-    doc.text(`Due Date: ${invoice.dueDate}`, 140, 35)
-
-    // Add status with color
+    // Add INVOICE text
+    doc.setFontSize(24)
+    doc.setFont("helvetica", "bold")
+    doc.text("INVOICE", 140, 20)
+    
+    // Add invoice number
     doc.setFontSize(12)
-    switch (invoice.status) {
-      case "paid":
-        doc.setTextColor(46, 125, 50) // Green
-        doc.text("PAID", 140, 45)
-        break
-      case "approved":
-        doc.setTextColor(25, 118, 210) // Blue
-        doc.text("APPROVED", 140, 45)
-        break
-      case "rejected":
-        doc.setTextColor(211, 47, 47) // Red
-        doc.text("REJECTED", 140, 45)
-        break
-      case "overdue":
-        doc.setTextColor(245, 124, 0) // Orange
-        doc.text("OVERDUE", 140, 45)
-        break
-      default:
-        doc.setTextColor(97, 97, 97) // Gray
-        doc.text("DRAFT", 140, 45)
-    }
+    doc.text(`#${invoice.id}`, 140, 30)
 
-    // Add client information
-    doc.setFontSize(12)
-    doc.setTextColor(44, 62, 80)
-    doc.text("Bill To:", 20, 60)
+    // Add dates with proper formatting
     doc.setFontSize(10)
-    doc.setTextColor(0, 0, 0)
-    doc.text(invoice.clientName, 20, 70)
-    doc.text(`Client ID: ${invoice.clientId}`, 20, 75)
+    doc.setFont("helvetica", "normal")
+    doc.text("Date:", 140, 45)
+    doc.text(formatDate(invoice.date), 170, 45)
+    doc.text("Due Date:", 140, 52)
+    doc.text(formatDate(invoice.dueDate), 170, 52)
+
+    // Add Balance Due
+    doc.setFontSize(12)
+    doc.text("Balance Due:", 140, 65)
+    doc.setFont("helvetica", "bold")
+    doc.text(`$${invoice.total}`, 170, 65)
+
+    // Add billing information
+    doc.setFontSize(10)
+    doc.setFont("helvetica", "normal")
+    doc.text("Bill To:", 20, 45)
+    doc.text("Ascend Media Co, LLC", 20, 52)
+    doc.text("Contact Information:", 20, 65)
+    doc.text("outreachascendmedia@gmail.com", 20, 72)
 
     // Add invoice items table
-    const tableColumn = ["Description", "Hours", "Rate", "Amount"]
-    const tableRows: any[][] = []
+    const tableColumn = ["Item", "Quantity", "Rate", "Amount"]
+    const tableRows = invoice.items.map(item => [
+      item.description,
+      item.quantity,
+      `$${item.rate}`,
+      `$${item.amount}`
+    ])
 
-    // Add invoice items to table
-    invoice.items.forEach((item) => {
-      const itemData = [item.description, item.hours || "", item.rate, item.amount]
-      tableRows.push(itemData)
-    })
-
-    // Generate the table using the imported autoTable function
+    // Generate the table
     autoTable(doc, {
       head: [tableColumn],
       body: tableRows,
       startY: 85,
       theme: "grid",
-      styles: { fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [44, 62, 80], textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [240, 240, 240] },
+      styles: { fontSize: 9, cellPadding: 5 },
+      headStyles: { fillColor: [51, 51, 51], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
     })
 
     // Get the final y position after the table
     const finalY = (doc as any).lastAutoTable.finalY + 10
 
     // Add totals
+    doc.setFontSize(10)
     doc.text("Subtotal:", 120, finalY)
-    doc.text(invoice.subtotal, 170, finalY, { align: "right" })
+    doc.text(`$${invoice.subtotal}`, 170, finalY, { align: "right" })
 
-    doc.text("Tax:", 120, finalY + 7)
-    doc.text(invoice.tax, 170, finalY + 7, { align: "right" })
+    doc.text("Tax (0%):", 120, finalY + 7)
+    doc.text(`$${invoice.tax}`, 170, finalY + 7, { align: "right" })
 
     doc.setFontSize(12)
     doc.setFont("helvetica", "bold")
     doc.text("Total:", 120, finalY + 15)
-    doc.text(invoice.total, 170, finalY + 15, { align: "right" })
+    doc.text(`$${invoice.total}`, 170, finalY + 15, { align: "right" })
 
-    // Add additional information based on status
-    let additionalInfoY = finalY + 30
+    // Add terms
     doc.setFontSize(10)
     doc.setFont("helvetica", "normal")
-
-    if (invoice.status === "paid" && invoice.paidDate) {
-      doc.setTextColor(46, 125, 50) // Green
-      doc.text(`Payment received on ${invoice.paidDate}`, 20, additionalInfoY)
-      additionalInfoY += 7
-    }
-
-    if (invoice.status === "approved" && invoice.approvedBy && invoice.approvedDate) {
-      doc.setTextColor(25, 118, 210) // Blue
-      doc.text(`Approved by ${invoice.approvedBy} on ${invoice.approvedDate}`, 20, additionalInfoY)
-      additionalInfoY += 7
-    }
-
-    if (invoice.status === "rejected" && invoice.rejectionReason) {
-      doc.setTextColor(211, 47, 47) // Red
-      doc.text(`Rejected: ${invoice.rejectionReason}`, 20, additionalInfoY)
-      additionalInfoY += 7
-    }
-
-    // Add footer
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(8)
-    doc.text("Thank you for your business!", 105, 280, { align: "center" })
-    doc.text("Generated by Ascend Media Dashboard", 105, 285, { align: "center" })
+    doc.text("Terms:", 20, finalY + 30)
+    doc.text("Direct Deposit", 20, finalY + 37)
 
     // Save the PDF
     doc.save(`Invoice-${invoice.id}.pdf`)

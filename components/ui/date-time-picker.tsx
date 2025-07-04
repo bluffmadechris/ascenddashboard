@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { format } from "date-fns"
 import { CalendarIcon, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -44,34 +44,31 @@ export function DateTimePicker({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(date)
   const [calendarOpen, setCalendarOpen] = useState(false)
   const [timeOpen, setTimeOpen] = useState(false)
-  const [hours, setHours] = useState<number>(date ? date.getHours() : 9)
-  const [minutes, setMinutes] = useState<number>(
-    date ? Math.floor(date.getMinutes() / minuteIncrement) * minuteIncrement : 0,
+  const [hours, setHours] = useState<number>(
+    date ? (date.getHours() % 12 === 0 ? 12 : date.getHours() % 12) : 9
   )
-  const [ampm, setAmPm] = useState<"AM" | "PM">(date ? (date.getHours() >= 12 ? "PM" : "AM") : "AM")
+  const [minutes, setMinutes] = useState<number>(
+    date ? Math.floor(date.getMinutes() / minuteIncrement) * minuteIncrement : 0
+  )
+  const [ampm, setAmPm] = useState<"AM" | "PM">(
+    date ? (date.getHours() >= 12 ? "PM" : "AM") : "AM"
+  )
 
   // Update internal state when date prop changes
   useEffect(() => {
     if (date) {
       setSelectedDate(date)
-      setHours(
-        date.getHours() >= 12
-          ? date.getHours() === 12
-            ? 12
-            : date.getHours() - 12
-          : date.getHours() === 0
-            ? 12
-            : date.getHours(),
-      )
+      const hours24 = date.getHours()
+      setHours(hours24 % 12 === 0 ? 12 : hours24 % 12)
       setMinutes(Math.floor(date.getMinutes() / minuteIncrement) * minuteIncrement)
-      setAmPm(date.getHours() >= 12 ? "PM" : "AM")
+      setAmPm(hours24 >= 12 ? "PM" : "AM")
     } else {
       setSelectedDate(undefined)
     }
   }, [date, minuteIncrement])
 
-  // Update the date when time changes
-  useEffect(() => {
+  // Update the parent's date when time changes
+  const updateParentDate = useCallback(() => {
     if (selectedDate) {
       const newDate = new Date(selectedDate)
       const isPM = ampm === "PM"
@@ -85,32 +82,37 @@ export function DateTimePicker({
       }
 
       newDate.setHours(hourValue, minutes, 0, 0)
-      setDate(newDate)
+
+      // Only update if the date actually changed
+      if (date?.getTime() !== newDate.getTime()) {
+        setDate(newDate)
+      }
     }
-  }, [hours, minutes, ampm, selectedDate, setDate])
+  }, [hours, minutes, ampm, selectedDate, setDate, date])
+
+  // Call updateParentDate when time values change
+  useEffect(() => {
+    updateParentDate()
+  }, [updateParentDate])
 
   // Generate time options
-  const generateTimeOptions = () => {
-    const hoursOptions = Array.from({ length: 12 }, (_, i) => i + 1)
-    const minutesOptions = Array.from({ length: Math.floor(60 / minuteIncrement) }, (_, i) => i * minuteIncrement)
-
-    return {
-      hours: hoursOptions,
-      minutes: minutesOptions,
-      ampm: ["AM", "PM"] as const,
-    }
+  const timeOptions = {
+    hours: Array.from({ length: 12 }, (_, i) => i + 1),
+    minutes: Array.from(
+      { length: Math.floor(60 / minuteIncrement) },
+      (_, i) => i * minuteIncrement
+    ),
+    ampm: ["AM", "PM"] as const,
   }
 
-  const timeOptions = generateTimeOptions()
-
   // Handle date selection
-  const handleDateSelect = (date: Date | undefined) => {
-    if (date) {
-      const newDate = new Date(date)
+  const handleDateSelect = (newDate: Date | undefined) => {
+    if (newDate) {
+      const updatedDate = new Date(newDate)
 
       // If we already had a date selected, preserve the time
       if (selectedDate) {
-        newDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0)
+        updatedDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0)
       } else {
         // Default time if no previous date
         const isPM = ampm === "PM"
@@ -122,11 +124,11 @@ export function DateTimePicker({
           hourValue = 0
         }
 
-        newDate.setHours(hourValue, minutes, 0, 0)
+        updatedDate.setHours(hourValue, minutes, 0, 0)
       }
 
-      setSelectedDate(newDate)
-      setDate(newDate)
+      setSelectedDate(updatedDate)
+      setDate(updatedDate)
       setCalendarOpen(false)
 
       // If time selection is enabled, open time popover after date selection
@@ -141,33 +143,26 @@ export function DateTimePicker({
 
   // Handle time selection
   const handleTimeChange = (type: "hours" | "minutes" | "ampm", value: any) => {
-    if (type === "hours") {
-      setHours(Number(value))
-    } else if (type === "minutes") {
-      setMinutes(Number(value))
-    } else if (type === "ampm") {
-      setAmPm(value as "AM" | "PM")
+    switch (type) {
+      case "hours":
+        setHours(Number(value))
+        break
+      case "minutes":
+        setMinutes(Number(value))
+        break
+      case "ampm":
+        setAmPm(value as "AM" | "PM")
+        break
     }
-  }
-
-  // Format the display value
-  const getFormattedValue = () => {
-    if (!selectedDate) return ""
-
-    const dateFormat = "MMM d, yyyy"
-    const timeFormat = "h:mm a"
-
-    if (showTimeSelect) {
-      return format(selectedDate, `${dateFormat} ${timeFormat}`)
-    }
-
-    return format(selectedDate, dateFormat)
   }
 
   // Clear the selection
   const handleClear = () => {
     setSelectedDate(undefined)
     setDate(undefined)
+    setHours(9)
+    setMinutes(0)
+    setAmPm("AM")
   }
 
   return (
@@ -186,7 +181,10 @@ export function DateTimePicker({
             <Button
               variant="outline"
               disabled={disabled}
-              className={cn("w-full justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}
+              className={cn(
+                "w-full justify-start text-left font-normal",
+                !selectedDate && "text-muted-foreground"
+              )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
               {selectedDate ? format(selectedDate, "MMM d, yyyy") : "Select date"}
@@ -204,7 +202,12 @@ export function DateTimePicker({
             />
             {clearable && selectedDate && (
               <div className="p-2 border-t border-border">
-                <Button variant="ghost" size="sm" className="w-full" onClick={handleClear}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleClear}
+                >
                   Clear
                 </Button>
               </div>
@@ -221,7 +224,7 @@ export function DateTimePicker({
                 disabled={disabled || !selectedDate}
                 className={cn(
                   "w-full justify-start text-left font-normal",
-                  (!selectedDate || disabled) && "opacity-50 cursor-not-allowed",
+                  (!selectedDate || disabled) && "opacity-50 cursor-not-allowed"
                 )}
               >
                 <Clock className="mr-2 h-4 w-4" />
@@ -231,6 +234,7 @@ export function DateTimePicker({
             <PopoverContent className="w-[240px] p-3" align={popoverAlign}>
               <div className="space-y-3">
                 <div className="grid grid-cols-3 gap-2">
+                  {/* Hours */}
                   <div className="space-y-1">
                     <Label className="text-xs">Hour</Label>
                     <Select
@@ -250,6 +254,8 @@ export function DateTimePicker({
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Minutes */}
                   <div className="space-y-1">
                     <Label className="text-xs">Minute</Label>
                     <Select
@@ -262,13 +268,18 @@ export function DateTimePicker({
                       </SelectTrigger>
                       <SelectContent>
                         {timeOptions.minutes.map((minute) => (
-                          <SelectItem key={`minute-${minute}`} value={minute.toString()}>
+                          <SelectItem
+                            key={`minute-${minute}`}
+                            value={minute.toString()}
+                          >
                             {minute.toString().padStart(2, "0")}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* AM/PM */}
                   <div className="space-y-1">
                     <Label className="text-xs">AM/PM</Label>
                     <Select
@@ -280,18 +291,15 @@ export function DateTimePicker({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {timeOptions.ampm.map((period) => (
-                          <SelectItem key={`period-${period}`} value={period}>
-                            {period}
+                        {timeOptions.ampm.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {value}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                <Button size="sm" className="w-full" onClick={() => setTimeOpen(false)}>
-                  Done
-                </Button>
               </div>
             </PopoverContent>
           </Popover>

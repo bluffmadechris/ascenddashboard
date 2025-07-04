@@ -378,23 +378,68 @@ class ApiClient {
   }
   
   // Calendar methods
-  async getCalendarEvents(): Promise<ApiResponse<any>> {
-    return this.get('/calendar/events');
+  async getCalendarEvents(): Promise<ApiResponse<{ events: any[] }>> {
+    return this.get<{ events: any[] }>('/calendar/events');
   }
   
-  async createCalendarEvent(eventData: any): Promise<ApiResponse<any>> {
-    return this.post('/calendar/events', eventData);
+  async createCalendarEvent(eventData: {
+    title: string;
+    description?: string;
+    start_time: string;
+    end_time: string;
+    location?: string;
+    attendees?: string[];
+    client_id?: number;
+    type?: string;
+    status?: string;
+  }): Promise<ApiResponse<{ event: any }>> {
+    return this.post<{ event: any }>('/calendar/events', eventData);
   }
   
-  async updateCalendarEvent(id: number, updates: any): Promise<ApiResponse<any>> {
-    return this.put(`/calendar/events/${id}`, updates);
+  async updateCalendarEvent(id: string, updates: {
+    title?: string;
+    description?: string;
+    start_time?: string;
+    end_time?: string;
+    location?: string;
+    attendees?: string[];
+    client_id?: number;
+    type?: string;
+    status?: string;
+  }): Promise<ApiResponse<{ event: any }>> {
+    return this.put<{ event: any }>(`/calendar/events/${id}`, updates);
   }
   
-  async deleteCalendarEvent(id: number): Promise<ApiResponse> {
+  async deleteCalendarEvent(id: string): Promise<ApiResponse> {
     return this.delete(`/calendar/events/${id}`);
   }
   
-    // Notification methods
+  // Add meeting request methods
+  async getMeetingRequests(type: 'owner' | 'requester'): Promise<ApiResponse<{ requests: any[] }>> {
+    return this.get<{ requests: any[] }>(`/calendar/meeting-requests?type=${type}`);
+  }
+
+  async createMeetingRequest(data: {
+    target_user_id: string;
+    subject: string;
+    description?: string;
+    proposed_date?: string;
+  }): Promise<ApiResponse<{ request: any }>> {
+    return this.post<{ request: any }>('/calendar/meeting-requests', data);
+  }
+
+  async updateMeetingRequest(id: string, updates: {
+    status?: 'pending' | 'approved' | 'rejected' | 'scheduled';
+    scheduledDate?: string;
+  }): Promise<ApiResponse<{ request: any }>> {
+    return this.put<{ request: any }>(`/calendar/meeting-requests/${id}`, updates);
+  }
+
+  async deleteMeetingRequest(id: string): Promise<ApiResponse> {
+    return this.delete(`/calendar/meeting-requests/${id}`);
+  }
+  
+  // Notification methods
   async getNotifications(): Promise<ApiResponse<any>> {
     return this.get('/notifications');
   }
@@ -432,6 +477,38 @@ class ApiClient {
   // Health check
   async healthCheck(): Promise<ApiResponse<any>> {
     return this.get('/health');
+  }
+
+  // Password change request methods
+  async createPasswordChangeRequest(data: {
+    userId: string
+    newPassword: string
+    reason: string
+  }): Promise<ApiResponse> {
+    return this.post('/auth/password-change-requests', data);
+  }
+
+  async getPasswordChangeRequests(): Promise<ApiResponse<{
+    requests: Array<{
+      id: string
+      userId: string
+      userName: string
+      newPassword: string
+      reason: string
+      status: "pending" | "approved" | "denied"
+      createdAt: string
+      updatedAt: string
+    }>
+  }>> {
+    return this.get('/auth/password-change-requests');
+  }
+
+  async approvePasswordChangeRequest(requestId: string): Promise<ApiResponse> {
+    return this.post(`/auth/password-change-requests/${requestId}/approve`);
+  }
+
+  async denyPasswordChangeRequest(requestId: string): Promise<ApiResponse> {
+    return this.post(`/auth/password-change-requests/${requestId}/deny`);
   }
 }
 

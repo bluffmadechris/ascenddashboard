@@ -3,37 +3,41 @@
 import { useState, useEffect, useMemo } from "react"
 import {
   format,
+  isSameDay,
+  isSameMonth,
+  isToday,
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
-  isSameDay,
-  parseISO,
   isValid,
-  isToday,
-  isSameMonth,
-  isWithinInterval,
-  isBefore,
-  isAfter,
-  eachDayOfInterval as eachDay,
 } from "date-fns"
 import { Clock } from "lucide-react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
-import { useAuth } from "@/lib/auth-context"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { cn } from "@/lib/utils"
+import { useAuth } from "@/lib/auth-context"
 import {
   type CalendarEvent,
   type Availability,
-  type UnavailableTimeSlot,
+  type DateAvailability,
   type RecurrenceRule,
   loadUserAvailability,
   saveUserAvailability,
+  getDefaultAvailability,
+  isDateAvailable,
+  toggleDateAvailability,
 } from "@/lib/calendar-utils"
-import { cn } from "@/lib/utils"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { TimeSlotManager } from "@/components/calendar/time-slot-manager"
-import { AvailabilityIndicator } from "@/components/calendar/availability-indicator"
-import { AvailabilityDetailModal } from "@/components/calendar/availability-detail-modal"
+import { AvailabilityIndicator } from "./availability-indicator"
+import { AvailabilityDetailModal } from "./availability-detail-modal"
+import { TimeSlotManager } from "./time-slot-manager"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface IntegratedAvailabilityCalendarProps {
   currentDate: Date
@@ -54,102 +58,76 @@ export function IntegratedAvailabilityCalendar({
 }: IntegratedAvailabilityCalendarProps) {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [availability, setAvailability] = useState<Availability | null>(null)
-  const [showTimeSlotManager, setShowTimeSlotManager] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
-
-  // New state for date range selection
-  const [rangeSelectionMode, setRangeSelectionMode] = useState(false)
-  const [rangeStartDate, setRangeStartDate] = useState<Date | null>(null)
-  const [rangeEndDate, setRangeEndDate] = useState<Date | null>(null)
-
-  // New state for availability detail modal
+  const [availability, setAvailability] = useState<Availability | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [detailDate, setDetailDate] = useState<Date>(new Date())
+  const [showTimeSlotManager, setShowTimeSlotManager] = useState(false)
+  const [detailDate, setDetailDate] = useState<Date | null>(null)
   const [detailEndDate, setDetailEndDate] = useState<Date | null>(null)
   const [detailIsAvailable, setDetailIsAvailable] = useState(true)
   const [detailStartTime, setDetailStartTime] = useState("09:00")
   const [detailEndTime, setDetailEndTime] = useState("17:00")
   const [detailNote, setDetailNote] = useState("")
-  const [detailRecurrence, setDetailRecurrence] = useState<RecurrenceRule | undefined>(undefined)
-
-  // Calculate days for the current month view
-  const calendarDays = useMemo(() => {
-    if (!isValid(currentDate)) {
-      return eachDayOfInterval({ start: startOfMonth(new Date()), end: endOfMonth(new Date()) })
-    }
-    const start = startOfMonth(currentDate)
-    const end = endOfMonth(currentDate)
-    return eachDayOfInterval({ start, end })
-  }, [currentDate])
+  const [detailRecurrence, setDetailRecurrence] = useState<RecurrenceRule | null>(null)
 
   // Load user availability
   useEffect(() => {
     if (!user) return
 
-    try {
-      const userAvailability = loadUserAvailability(user.id)
-      if (userAvailability) {
-        setAvailability(userAvailability)
-      } else {
-        // Create default availability
-        const defaultAvailability: Availability = {
-          userId: user.id,
-          dates: [],
-          defaultStartTime: "09:00",
-          defaultEndTime: "17:00",
-          unavailableSlots: [],
-        }
-        setAvailability(defaultAvailability)
-        saveUserAvailability(defaultAvailability)
-      }
-    } catch (error) {
-      console.error("Error loading availability:", error)
+    // Load existing availability or initialize with defaults
+    const existingAvailability = loadUserAvailability(user.id)
+    if (!existingAvailability) {
+      // Initialize with defaults only if no existing availability
+      const userAvailability = getDefaultAvailability(user.id)
+      saveUserAvailability(userAvailability)
+      setAvailability(userAvailability)
+    } else {
+      setAvailability(existingAvailability)
     }
-  }, [user, refreshKey])
+  }, [user])
+
+  // Calculate calendar days
+  const calendarDays = useMemo(() => {
+    if (!isValid(currentDate)) return []
+    const start = startOfMonth(currentDate)
+    const end = endOfMonth(currentDate)
+    return eachDayOfInterval({ start, end })
+  }, [currentDate])
 
   // Get events for a specific date
-  const getEventsForDate = (date: Date) => {
+  const getEventsForDate = (date: Date): CalendarEvent[] => {
     if (!isValid(date)) return []
 
     return events.filter((event) => {
       try {
-        const eventDate = parseISO(event.start)
+        const eventDate = new Date(event.start)
         return isValid(eventDate) && isSameDay(eventDate, date)
-      } catch (error) {
+      } catch {
         return false
       }
     })
   }
 
   // Format time from ISO string
-  const formatTimeFromISO = (isoString: string) => {
+  const formatTimeFromISO = (isoString: string): string => {
     try {
-      const date = parseISO(isoString)
-      if (!isValid(date)) return "Invalid time"
-
+      const date = new Date(isoString)
       return format(date, "h:mm a")
-    } catch (error) {
-      console.error("Error formatting time:", error)
-      return "Invalid time"
+    } catch {
+      return ""
     }
+  }
+
+  // Check if a day is fixed unavailable (Thursday and Friday)
+  const isFixedUnavailable = (date: Date): boolean => {
+    const dayOfWeek = date.getDay()
+    return dayOfWeek === 4 || dayOfWeek === 5 // Thursday is 4, Friday is 5
   }
 
   // Check if a day is available
   const isDayAvailable = (date: Date): boolean => {
-    if (!availability) return false
-
-    const dateStr = format(date, "yyyy-MM-dd")
-    const dateAvail = availability.dates.find((d) => d.date === dateStr)
-
-    // If no specific availability is set, default to available on weekdays
-    if (!dateAvail) {
-      const dayOfWeek = date.getDay()
-      return dayOfWeek >= 1 && dayOfWeek <= 5 // Monday to Friday
-    }
-
-    return dateAvail.available
+    if (!user) return false
+    return isDateAvailable(user.id, date)
   }
 
   // Check if a day has unavailable time slots
@@ -169,18 +147,10 @@ export function IntegratedAvailabilityCalendar({
   }
 
   // Get availability details for a date
-  const getAvailabilityDetailsForDate = (
-    date: Date,
-  ): {
-    isAvailable: boolean
-    startTime: string
-    endTime: string
-    note?: string
-    recurrence?: RecurrenceRule
-  } => {
+  const getAvailabilityDetailsForDate = (date: Date) => {
     if (!availability) {
       return {
-        isAvailable: true,
+        isAvailable: false,
         startTime: "09:00",
         endTime: "17:00",
       }
@@ -189,90 +159,37 @@ export function IntegratedAvailabilityCalendar({
     const dateStr = format(date, "yyyy-MM-dd")
     const dateAvail = availability.dates.find((d) => d.date === dateStr)
 
-    // If no specific availability is set, use defaults
     if (!dateAvail) {
-      const dayOfWeek = date.getDay()
-      const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5
-
       return {
-        isAvailable: isWeekday,
+        isAvailable: false,
         startTime: availability.defaultStartTime,
         endTime: availability.defaultEndTime,
       }
     }
 
-    // Get any notes from unavailable slots
-    const slots = getUnavailableSlotsForDate(date)
-    const note = slots.length > 0 ? slots[0].title : undefined
-    const recurrence = slots.length > 0 ? slots[0].recurring : undefined
-
     return {
       isAvailable: dateAvail.available,
       startTime: dateAvail.startTime,
       endTime: dateAvail.endTime,
-      note,
-      recurrence,
     }
-  }
-
-  // Check if a date is in the selected range
-  const isInSelectedRange = (date: Date): boolean => {
-    if (!rangeStartDate || !rangeEndDate) return false
-
-    // Ensure start date is before end date
-    const start = isBefore(rangeStartDate, rangeEndDate) ? rangeStartDate : rangeEndDate
-    const end = isAfter(rangeEndDate, rangeStartDate) ? rangeEndDate : rangeStartDate
-
-    return isWithinInterval(date, { start, end })
   }
 
   // Toggle day availability
   const toggleDayAvailability = (date: Date) => {
-    if (!user || !availability) return
+    if (!user) return
 
     try {
-      const dateStr = format(date, "yyyy-MM-dd")
-      const updatedDates = [...availability.dates]
-      const existingIndex = updatedDates.findIndex((d) => d.date === dateStr)
+      const result = toggleDateAvailability(user.id, date)
 
-      if (existingIndex !== -1) {
-        // Toggle availability
-        updatedDates[existingIndex] = {
-          ...updatedDates[existingIndex],
-          available: !updatedDates[existingIndex].available,
-        }
-      } else {
-        // Create new entry with default times
-        updatedDates.push({
-          date: dateStr,
-          available: false, // Default to unavailable when clicking for the first time
-          startTime: availability.defaultStartTime,
-          endTime: availability.defaultEndTime,
-        })
-      }
-
-      // Sort dates chronologically
-      updatedDates.sort((a, b) => a.date.localeCompare(b.date))
-
-      // Update availability
-      const updatedAvailability = {
-        ...availability,
-        dates: updatedDates,
-      }
-
-      // Save to storage
-      saveUserAvailability(updatedAvailability)
+      // Update local state
+      const updatedAvailability = loadUserAvailability(user.id)
       setAvailability(updatedAvailability)
+      onAvailabilityChange?.()
 
-      // Notify parent of change
-      if (onAvailabilityChange) {
-        onAvailabilityChange()
-      }
-
-      // Show toast
+      // Show feedback toast
       toast({
-        title: "Availability updated",
-        description: `${format(date, "MMMM d, yyyy")} marked as ${isDayAvailable(date) ? "unavailable" : "available"}`,
+        title: result.available ? "Marked as Available" : "Marked as Unavailable",
+        description: format(date, "MMMM d, yyyy"),
       })
     } catch (error) {
       console.error("Error toggling availability:", error)
@@ -288,6 +205,8 @@ export function IntegratedAvailabilityCalendar({
   const handleDateClick = (date: Date) => {
     // Toggle availability when clicking the day
     toggleDayAvailability(date)
+    setSelectedDate(date)
+    onDateClick?.(date)
   }
 
   // Get availability status class
@@ -295,120 +214,64 @@ export function IntegratedAvailabilityCalendar({
     const isAvailable = isDayAvailable(date)
     const hasUnavailable = hasUnavailableTimeSlots(date)
     const isSelected = selectedDate ? isSameDay(date, selectedDate) : false
-    const isInRange = isInSelectedRange(date)
 
     return cn(
       "relative h-full min-h-[100px] p-2 hover:bg-accent/50 cursor-pointer",
       isToday(date) && "border-2 border-primary",
       !isSameMonth(date, currentDate) && "text-muted-foreground bg-muted/50",
       isSelected && "bg-accent",
-      isInRange && "bg-accent/50",
       isAvailable ? "bg-green-100/50" : "bg-red-100/50",
       hasUnavailable && "ring-1 ring-yellow-500",
     )
   }
 
   // Open availability detail modal
-  const openDetailModal = (date: Date, endDate?: Date) => {
+  const openDetailModal = (date: Date) => {
     const details = getAvailabilityDetailsForDate(date)
-
     setDetailDate(date)
-    setDetailEndDate(endDate || null)
     setDetailIsAvailable(details.isAvailable)
     setDetailStartTime(details.startTime)
     setDetailEndTime(details.endTime)
-    setDetailNote(details.note || "")
-    setDetailRecurrence(details.recurrence)
-
     setShowDetailModal(true)
   }
 
   // Save availability details
   const saveAvailabilityDetails = (data: {
     isAvailable: boolean
-    startDate: Date
-    endDate: Date
     startTime: string
     endTime: string
-    note: string
-    recurrence?: RecurrenceRule
+    note?: string
+    recurrence?: RecurrenceRule | null
   }) => {
-    // If this is a date range (start date != end date)
-    if (!isSameDay(data.startDate, data.endDate)) {
-      updateDateRangeAvailability(
-        data.startDate,
-        data.endDate,
-        data.isAvailable,
-        data.startTime,
-        data.endTime,
-        data.note,
-        data.recurrence,
-      )
-      return
-    }
-
-    // Otherwise, handle as a single date
-    if (!user || !availability) return
+    if (!user || !availability || !detailDate) return
 
     try {
-      const dateStr = format(data.startDate, "yyyy-MM-dd")
+      const dateStr = format(detailDate, "yyyy-MM-dd")
       const updatedDates = [...availability.dates]
       const existingIndex = updatedDates.findIndex((d) => d.date === dateStr)
 
-      // Update or add date availability
+      const newDateAvailability: DateAvailability = {
+        date: dateStr,
+        available: data.isAvailable,
+        startTime: data.startTime,
+        endTime: data.endTime,
+      }
+
       if (existingIndex !== -1) {
-        updatedDates[existingIndex] = {
-          ...updatedDates[existingIndex],
-          available: data.isAvailable,
-          startTime: data.startTime,
-          endTime: data.endTime,
-        }
+        updatedDates[existingIndex] = newDateAvailability
       } else {
-        updatedDates.push({
-          date: dateStr,
-          available: data.isAvailable,
-          startTime: data.startTime,
-          endTime: data.endTime,
-        })
+        updatedDates.push(newDateAvailability)
       }
 
-      // Handle note and recurrence by updating unavailable slots
-      let updatedSlots = [...availability.unavailableSlots]
-
-      // Remove existing slots for this date
-      updatedSlots = updatedSlots.filter((slot) => slot.date !== dateStr)
-
-      // Add new slot if there's a note or recurrence
-      if (data.note || data.recurrence) {
-        updatedSlots.push({
-          id: `${dateStr}-${Date.now()}`,
-          date: dateStr,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          title: data.note,
-          recurring: data.recurrence,
-        })
-      }
-
-      // Save updated availability
-      const updatedAvailability: Availability = {
+      const updatedAvailability = {
         ...availability,
         dates: updatedDates,
-        unavailableSlots: updatedSlots,
       }
 
       saveUserAvailability(updatedAvailability)
       setAvailability(updatedAvailability)
-      setRefreshKey((prev) => prev + 1)
-
-      if (onAvailabilityChange) {
-        onAvailabilityChange()
-      }
-
-      toast({
-        title: "Availability details saved",
-        description: `Updated availability for ${format(data.startDate, "MMMM d, yyyy")}`,
-      })
+      setShowDetailModal(false)
+      onAvailabilityChange?.()
     } catch (error) {
       console.error("Error saving availability details:", error)
       toast({
@@ -419,18 +282,18 @@ export function IntegratedAvailabilityCalendar({
     }
   }
 
-  // Handle double click to open time slot manager
+  // Handle double click
   const handleDoubleClick = (date: Date) => {
-    setSelectedDate(date)
-    setShowTimeSlotManager(true)
+    // Don't allow detail view for fixed unavailable days
+    if (isFixedUnavailable(date)) return
+
+    openDetailModal(date)
   }
 
   // Handle time slot manager close
-  const handleTimeSlotManagerClose = () => {
-    setShowTimeSlotManager(false)
-    setRefreshKey((prev) => prev + 1)
-    if (onAvailabilityChange) {
-      onAvailabilityChange()
+  const handleTimeSlotManagerClose = (value: boolean) => {
+    if (!value) {
+      setShowTimeSlotManager(false)
     }
   }
 
@@ -546,107 +409,132 @@ export function IntegratedAvailabilityCalendar({
   }
 
   return (
-    <div className="h-full overflow-auto">
-      <div className="grid grid-cols-7 gap-px bg-muted p-px">
-        {/* Weekday headers */}
-        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-          <div key={day} className="bg-card px-2 py-3 text-center text-sm font-medium">
-            {day}
-          </div>
-        ))}
+    <div className="h-full flex flex-col">
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7 border border-border bg-card rounded-lg overflow-hidden">
+        {/* Day headers */}
+        <div className="col-span-7 grid grid-cols-7 bg-muted/50 border-b border-border">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+            <div
+              key={day}
+              className="text-center p-3 text-sm font-medium text-muted-foreground border-r border-border last:border-r-0"
+            >
+              {day}
+            </div>
+          ))}
+        </div>
 
-        {/* Calendar grid */}
-        {calendarDays.map((date, dayIdx) => {
+        {/* Calendar days */}
+        {calendarDays.map((date, index) => {
           const dayEvents = getEventsForDate(date)
-          const dayAvailability = getAvailabilityDetailsForDate(date)
+          const isAvail = isDayAvailable(date)
+          const hasUnavailable = hasUnavailableTimeSlots(date)
+          const availDetails = getAvailabilityDetailsForDate(date)
+          const isSelected = selectedDate ? isSameDay(date, selectedDate) : false
+          const isCurrentMonth = isSameMonth(date, currentDate)
 
           return (
             <div
-              key={date.toString()}
-              className={getAvailabilityStatusClass(date)}
+              key={date.toISOString()}
+              className={cn(
+                "min-h-[140px] relative group transition-all duration-200",
+                "border-r border-b border-border last:border-r-0",
+                "hover:bg-accent/50",
+                isSelected && "ring-1 ring-primary ring-inset",
+                !isCurrentMonth && "opacity-50",
+                isToday(date) && "bg-accent/30",
+                "cursor-pointer"
+              )}
               onClick={() => handleDateClick(date)}
+              onDoubleClick={() => handleDoubleClick(date)}
             >
-              <div className="flex justify-between">
-                <span className="text-sm">{format(date, "d")}</span>
-                {dayEvents.length > 0 && (
-                  <Badge variant="secondary" className="ml-auto">
-                    {dayEvents.length}
-                  </Badge>
-                )}
-              </div>
+              {/* Date number and availability status */}
+              <div className="p-2 flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className={cn(
+                    "text-sm font-medium",
+                    isToday(date) && "bg-primary text-primary-foreground rounded-full w-7 h-7 flex items-center justify-center"
+                  )}>
+                    {format(date, "d")}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {hasUnavailable && (
+                      <Badge variant="outline" className="h-5 px-1">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                      </Badge>
+                    )}
+                    <AvailabilityIndicator
+                      available={isAvail}
+                      onClick={() => toggleDayAvailability(date)}
+                      className="opacity-100"
+                    />
+                  </div>
+                </div>
 
-              {/* Events */}
-              <div className="mt-1">
-                {dayEvents.slice(0, 2).map((event) => (
-                  <TooltipProvider key={event.id}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className="mb-1 truncate rounded-sm bg-primary/10 px-1 py-0.5 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation() // Prevent triggering the day click
-                            if (onEventClick) onEventClick(event)
-                          }}
+                {/* Events list */}
+                <div className="mt-1">
+                  {dayEvents.map((event, eventIndex) => (
+                    <TooltipProvider key={event.id}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={cn(
+                              "text-xs px-2 py-1 rounded-md truncate cursor-pointer",
+                              "bg-primary/10 hover:bg-primary/20 transition-colors",
+                              "border border-border"
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEventClick?.(event)
+                            }}
+                          >
+                            {event.title}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          align="center"
+                          className="bg-card/95 backdrop-blur-sm border-border/50"
                         >
-                          {event.title}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p className="font-medium">{event.title}</p>
-                        <p className="text-xs">
-                          {formatTimeFromISO(event.start)} - {formatTimeFromISO(event.end)}
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ))}
-                {dayEvents.length > 2 && (
-                  <div className="text-xs text-muted-foreground">+{dayEvents.length - 2} more</div>
-                )}
-              </div>
-
-              {/* Availability indicator */}
-              <div className="absolute bottom-1 right-1">
-                <AvailabilityIndicator
-                  isAvailable={dayAvailability.isAvailable}
-                  hasUnavailableSlots={hasUnavailableTimeSlots(date)}
-                  onClick={(e) => {
-                    e.stopPropagation() // Prevent triggering the day click
-                    openDetailModal(date)
-                  }}
-                />
+                          <div className="text-sm">
+                            <div className="font-medium">{event.title}</div>
+                            <div className="text-muted-foreground">
+                              {formatTimeFromISO(event.start)} - {formatTimeFromISO(event.end)}
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+                </div>
               </div>
             </div>
           )
         })}
       </div>
 
-      {/* Time slot manager dialog */}
-      <Dialog open={showTimeSlotManager} onOpenChange={setShowTimeSlotManager}>
-        <DialogContent className="max-w-lg">
+      {/* Time Slot Manager Dialog */}
+      <Dialog open={showTimeSlotManager} onOpenChange={handleTimeSlotManagerClose}>
+        <DialogContent className="sm:max-w-[500px]">
           {selectedDate && (
             <TimeSlotManager
               date={selectedDate}
               availability={availability}
               onSave={(slots) => {
-                if (!availability) return
-
-                const updatedAvailability = {
-                  ...availability,
-                  unavailableSlots: [
-                    ...availability.unavailableSlots.filter(
-                      (slot) => slot.date !== format(selectedDate, "yyyy-MM-dd"),
-                    ),
-                    ...slots,
-                  ],
-                }
-
-                saveUserAvailability(updatedAvailability)
-                setAvailability(updatedAvailability)
-                setShowTimeSlotManager(false)
-
-                if (onAvailabilityChange) {
-                  onAvailabilityChange()
+                if (availability) {
+                  const updatedAvailability = {
+                    ...availability,
+                    unavailableSlots: [
+                      ...availability.unavailableSlots.filter(
+                        (slot) => slot.date !== format(selectedDate, "yyyy-MM-dd")
+                      ),
+                      ...slots,
+                    ],
+                  }
+                  saveUserAvailability(updatedAvailability)
+                  setAvailability(updatedAvailability)
+                  setShowTimeSlotManager(false)
+                  onAvailabilityChange?.()
                 }
               }}
             />
@@ -654,7 +542,7 @@ export function IntegratedAvailabilityCalendar({
         </DialogContent>
       </Dialog>
 
-      {/* Availability detail modal */}
+      {/* Availability Detail Modal */}
       <AvailabilityDetailModal
         open={showDetailModal}
         onOpenChange={setShowDetailModal}

@@ -11,8 +11,10 @@ import { EditTeamMemberForm } from "@/components/dashboard/edit-team-member-form
 import { RolesList } from "@/components/dashboard/roles-list"
 import { CreateRoleForm } from "@/components/dashboard/create-role-form"
 import { EditRoleForm } from "@/components/dashboard/edit-role-form"
+import { PasswordChangeRequestsList } from "@/components/dashboard/password-change-requests-list"
+import { StrikesManagement } from "@/components/dashboard/strikes-management"
 
-import { Shield, Users, BarChart, UserPlus, Bell } from "lucide-react"
+import { Shield, Users, BarChart, UserPlus, Bell, LockKeyhole, AlertTriangle } from "lucide-react"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { Button } from "@/components/ui/button"
 import { TeamProfileEditor } from "@/components/dashboard/team-profile-editor"
@@ -169,43 +171,77 @@ export default function OwnerPanelPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Owner Panel</h1>
-      </div>
+    <div className="container mx-auto py-6 space-y-6">
+      <h1 className="text-2xl font-semibold">Owner Panel</h1>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-5 sm:w-[600px]">
-          <TabsTrigger value="dashboard" onClick={() => router.push("/owner-panel?tab=dashboard", { scroll: false })}>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="w-full grid grid-cols-4 lg:grid-cols-8 gap-1">
+          <TabsTrigger
+            value="dashboard"
+            onClick={() => router.push("/owner-panel?tab=dashboard", { scroll: false })}
+            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
+          >
             <BarChart className="mr-2 h-4 w-4" />
-            Dashboard
+            <span className="hidden sm:inline">Dashboard</span>
+            <span className="sm:hidden">Dash</span>
           </TabsTrigger>
           <TabsTrigger
-            value="team-members"
-            onClick={() => router.push("/owner-panel?tab=team-members", { scroll: false })}
+            value="roles"
+            onClick={() => router.push("/owner-panel?tab=roles", { scroll: false })}
+            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
+          >
+            <Shield className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Roles</span>
+            <span className="sm:hidden">Roles</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="team"
+            onClick={() => router.push("/owner-panel?tab=team", { scroll: false })}
+            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <Users className="mr-2 h-4 w-4" />
-            Team
+            <span className="hidden sm:inline">Team</span>
+            <span className="sm:hidden">Team</span>
           </TabsTrigger>
           <TabsTrigger
-            value="team-profiles"
-            onClick={() => router.push("/owner-panel?tab=team-profiles", { scroll: false })}
+            value="onboarding"
+            onClick={() => router.push("/owner-panel?tab=onboarding", { scroll: false })}
+            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <UserPlus className="mr-2 h-4 w-4" />
-            Team Profiles
+            <span className="hidden sm:inline">Onboarding</span>
+            <span className="sm:hidden">New</span>
           </TabsTrigger>
-          <TabsTrigger value="roles" onClick={() => router.push("/owner-panel?tab=roles", { scroll: false })}>
-            <Shield className="mr-2 h-4 w-4" />
-            Roles
-          </TabsTrigger>
-          <TabsTrigger value="notifications" onClick={() => router.push("/owner-panel?tab=notifications", { scroll: false })}>
+          <TabsTrigger
+            value="notifications"
+            onClick={() => router.push("/owner-panel?tab=notifications", { scroll: false })}
+            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
+          >
             <Bell className="mr-2 h-4 w-4" />
-            Notifications
+            <span className="hidden sm:inline">Notifications</span>
+            <span className="sm:hidden">Notif</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="password-requests"
+            onClick={() => router.push("/owner-panel?tab=password-requests", { scroll: false })}
+            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
+          >
+            <LockKeyhole className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Password Requests</span>
+            <span className="sm:hidden">Pass</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="strikes"
+            onClick={() => router.push("/owner-panel?tab=strikes", { scroll: false })}
+            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
+          >
+            <AlertTriangle className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Strikes</span>
+            <span className="sm:hidden">Strikes</span>
           </TabsTrigger>
         </TabsList>
 
-        {/* Dashboard Tab */}
-        <TabsContent value="dashboard" className="space-y-4">
+        <TabsContent value="dashboard" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Owner Dashboard</CardTitle>
@@ -217,8 +253,21 @@ export default function OwnerPanelPage() {
           </Card>
         </TabsContent>
 
-        {/* Team Members Tab */}
-        <TabsContent value="team-members" className="space-y-4">
+        <TabsContent value="roles" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Role Management</CardTitle>
+              <CardDescription>
+                Create and manage custom roles with specific permissions that can be assigned to team members.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RolesList onCreateRole={handleCreateRole} onEditRole={handleEditRole} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="team" className="mt-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div>
@@ -241,101 +290,11 @@ export default function OwnerPanelPage() {
           </Card>
         </TabsContent>
 
-        {/* Team Profiles Tab */}
-        <TabsContent value="team-profiles" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Team Member Profiles</CardTitle>
-              <CardDescription>
-                Edit team member profiles including names, titles, bios, and avatars. Changes will be immediately
-                reflected on the team page.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TeamProfileEditor />
-            </CardContent>
-          </Card>
+        <TabsContent value="onboarding" className="mt-6">
+          {/* Onboarding content */}
         </TabsContent>
 
-        <TabsContent value="create-member" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Create New Team Member</CardTitle>
-              <CardDescription>Add a new team member to your organization and set their permissions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CreateTeamMemberForm onSuccess={handleCreateMemberSuccess} onCancel={handleCancelEditMember} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="edit-member" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Edit Team Member</CardTitle>
-              <CardDescription>Update team member details, role, and client access permissions.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selectedMemberId && (
-                <EditTeamMemberForm
-                  memberId={selectedMemberId}
-                  onSuccess={handleUpdateMemberSuccess}
-                  onCancel={handleCancelEditMember}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Roles Tab */}
-        <TabsContent value="roles" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Role Management</CardTitle>
-              <CardDescription>
-                Create and manage custom roles with specific permissions that can be assigned to team members.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <RolesList onCreateRole={handleCreateRole} onEditRole={handleEditRole} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="create-role" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Create New Role</CardTitle>
-              <CardDescription>
-                Define a new role with specific permissions that can be assigned to team members.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CreateRoleForm onSuccess={handleCreateRoleSuccess} onCancel={handleCancelEditRole} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="edit-role" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Edit Role</CardTitle>
-              <CardDescription>Modify role details and permissions. System roles cannot be edited.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selectedRoleId && (
-                <EditRoleForm
-                  roleId={selectedRoleId}
-                  onSuccess={handleUpdateRoleSuccess}
-                  onCancel={handleCancelEditRole}
-                />
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Notifications Tab */}
-        <TabsContent value="notifications" className="space-y-4">
+        <TabsContent value="notifications" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>Send Notifications</CardTitle>
@@ -349,6 +308,13 @@ export default function OwnerPanelPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="password-requests" className="mt-6">
+          <PasswordChangeRequestsList />
+        </TabsContent>
+
+        <TabsContent value="strikes" className="mt-6">
+          <StrikesManagement />
+        </TabsContent>
       </Tabs>
 
       <div className="grid gap-6">

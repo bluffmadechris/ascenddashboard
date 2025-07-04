@@ -134,27 +134,6 @@ export default function CalendarPage() {
     return eachDayOfInterval({ start, end })
   }, [currentDate])
 
-  // Convert meeting requests to calendar events
-  const convertMeetingRequestsToEvents = (meetingRequests: MeetingRequest[]): CalendarEvent[] => {
-    return meetingRequests
-      .filter(request => request.status === 'scheduled' && request.scheduledDate)
-      .map(request => ({
-        id: `meeting-request-${request.id}`,
-        title: `Meeting: ${request.subject}`,
-        description: request.description,
-        start: request.scheduledDate!,
-        end: new Date(new Date(request.scheduledDate!).getTime() + 60 * 60 * 1000).toISOString(), // Default 1 hour
-        type: 'meeting' as const,
-        status: 'confirmed' as const,
-        createdBy: request.ownerId,
-        attendees: [request.requesterId, request.ownerId],
-        color: '#10b981', // Green color for meeting requests
-        createdAt: request.createdAt,
-        updatedAt: request.updatedAt,
-        allDay: false,
-      }))
-  }
-
   // Load events with support for multiple users
   useEffect(() => {
     const loadEvents = async () => {
@@ -185,8 +164,8 @@ export default function CalendarPage() {
         }
 
         // Load meeting requests and convert them to events
-        const meetingRequestsAsRequester = getMeetingRequestsForUser(user.id, 'requester')
-        const meetingRequestsAsOwner = getMeetingRequestsForUser(user.id, 'owner')
+        const meetingRequestsAsRequester = await getMeetingRequestsForUser(user.id, 'requester')
+        const meetingRequestsAsOwner = await getMeetingRequestsForUser(user.id, 'owner')
         const allMeetingRequests = [...meetingRequestsAsRequester, ...meetingRequestsAsOwner]
         const meetingRequestEvents = convertMeetingRequestsToEvents(allMeetingRequests)
 
@@ -219,6 +198,27 @@ export default function CalendarPage() {
       window.removeEventListener("storage", handleStorageChange)
     }
   }, [toast, refreshKey, user, selectedEmployees])
+
+  // Convert meeting requests to calendar events
+  const convertMeetingRequestsToEvents = (meetingRequests: MeetingRequest[]): CalendarEvent[] => {
+    return meetingRequests
+      .filter(request => request.status === 'scheduled' && request.scheduledDate)
+      .map(request => ({
+        id: `meeting-request-${request.id}`,
+        title: `Meeting: ${request.subject}`,
+        description: request.description || '',
+        start: new Date(request.scheduledDate!).toISOString(),
+        end: new Date(new Date(request.scheduledDate!).getTime() + 60 * 60 * 1000).toISOString(), // Default 1 hour
+        type: 'meeting' as const,
+        status: 'confirmed' as const,
+        createdBy: request.requesterId,
+        attendees: [request.requesterId, request.ownerId],
+        color: '#10b981', // Green color for meeting requests
+        createdAt: request.createdAt,
+        updatedAt: request.updatedAt,
+        allDay: false,
+      }))
+  }
 
   // Handle date navigation
   const goToToday = () => {

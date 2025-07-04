@@ -173,11 +173,42 @@ export function SimpleInvoicesList({
     if (!selectedInvoice) return
 
     try {
-      await apiClient.deleteInvoice(parseInt(selectedInvoice.id))
-      toast("Invoice deleted successfully")
-      setInvoices(invoices.filter(inv => inv.id !== selectedInvoice.id))
+      const response = await apiClient.deleteInvoice(parseInt(selectedInvoice.id))
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to delete invoice')
+      }
+
+      // Only update UI if API call was successful
+      toast.success("Invoice deleted successfully")
+      setInvoices(prevInvoices => prevInvoices.filter(inv => inv.id !== selectedInvoice.id))
+
+      // Trigger a refresh of the invoices list
+      const refreshResponse = await apiClient.getInvoices()
+      if (refreshResponse.success) {
+        let allInvoices = refreshResponse.data.invoices as SimpleInvoice[]
+
+        // Apply filters
+        if (!isOwner) {
+          allInvoices = allInvoices.filter(invoice => invoice.created_by === user?.id)
+        }
+        if (filterBy?.status) {
+          allInvoices = allInvoices.filter(invoice => invoice.status === filterBy.status)
+        }
+        if (filterBy?.createdBy) {
+          allInvoices = allInvoices.filter(invoice => invoice.created_by === filterBy.createdBy)
+        }
+
+        // Sort by date (newest first)
+        allInvoices = allInvoices.sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+
+        setInvoices(allInvoices)
+      }
     } catch (error) {
-      toast("Failed to delete invoice", { className: "text-destructive" })
+      console.error("Error deleting invoice:", error)
+      toast.error("Failed to delete invoice")
     } finally {
       setDeleteDialogOpen(false)
       setSelectedInvoice(null)

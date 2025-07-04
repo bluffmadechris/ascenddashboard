@@ -3,6 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react"
 import type { Notification } from "@/lib/notification-types"
+import { playNotificationSound, isSoundEnabled } from "@/lib/sound-utils"
 
 interface NotificationContextType {
   notifications: Notification[]
@@ -13,7 +14,9 @@ interface NotificationContextType {
   clearAll: () => Promise<void>
   clearRead: () => Promise<void>
   isClearing: boolean
-  debugNotifications: () => void // Add this line
+  soundEnabled: boolean
+  toggleSound: (enabled: boolean) => void
+  debugNotifications: () => void
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
@@ -21,6 +24,7 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isClearing, setIsClearing] = useState(false)
+  const [soundEnabled, setSoundEnabled] = useState(true)
   const isMounted = useRef(true)
 
   // Track if we're in the middle of a clearing operation to prevent race conditions
@@ -91,6 +95,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, [notifications])
 
+  // Initialize sound preference
+  useEffect(() => {
+    setSoundEnabled(isSoundEnabled())
+  }, [])
+
+  // Toggle sound preference
+  const toggleSound = useCallback((enabled: boolean) => {
+    setSoundEnabled(enabled)
+    toggleNotificationSound(enabled)
+  }, [])
+
   // Add a new notification
   const addNotification = useCallback(
     (notification: Notification) => {
@@ -110,10 +125,21 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         read: notification.read || false,
       }
 
+      // Play sound for important notifications
+      if (
+        soundEnabled &&
+        (notification.type === "invoice_approved" ||
+          notification.type === "invoice_paid" ||
+          notification.type === "owner_announcement" ||
+          (notification.type === "owner_alert" && notification.priority === "urgent"))
+      ) {
+        playNotificationSound()
+      }
+
       setNotifications((prev) => [newNotification, ...prev])
       return newNotification
     },
-    [isClearing],
+    [isClearing, soundEnabled]
   )
 
   // Mark a notification as read
@@ -259,21 +285,37 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     console.log("hasInitialized:", hasInitialized.current)
   }, [notifications, isClearing])
 
-  // Add it to the context value
+  const contextValue = React.useMemo<NotificationContextType>(
+    () => ({
+      notifications,
+      unreadCount,
+      addNotification,
+      markAsRead,
+      markAllAsRead,
+      clearAll,
+      clearRead,
+      isClearing,
+      soundEnabled,
+      toggleSound,
+      debugNotifications,
+    }),
+    [
+      notifications,
+      unreadCount,
+      addNotification,
+      markAsRead,
+      markAllAsRead,
+      clearAll,
+      clearRead,
+      isClearing,
+      soundEnabled,
+      toggleSound,
+      debugNotifications,
+    ]
+  )
+
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        addNotification,
-        markAsRead,
-        markAllAsRead,
-        clearAll,
-        clearRead,
-        isClearing,
-        debugNotifications, // Add this line
-      }}
-    >
+    <NotificationContext.Provider value={contextValue}>
       {children}
     </NotificationContext.Provider>
   )

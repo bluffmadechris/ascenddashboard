@@ -14,6 +14,9 @@ import {
   Shield,
   Info,
   Settings,
+  Trash,
+  Volume2,
+  VolumeX,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,6 +29,14 @@ import { format } from "date-fns"
 import { api } from "@/lib/api-client"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 function getNotificationIcon(type: Notification["type"]) {
   switch (type) {
@@ -54,7 +65,9 @@ export function NotificationsMenu() {
     markAllAsRead,
     deleteNotification,
     refreshNotifications,
-    setNotifications
+    setNotifications,
+    soundEnabled,
+    toggleSound,
   } = useNotifications()
   const [isOpen, setIsOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
