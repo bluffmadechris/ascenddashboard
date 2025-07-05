@@ -40,7 +40,7 @@ interface ScheduleMeetingFormProps {
 }
 
 export function ScheduleMeetingForm({ onSuccess, onCancel, initialDate }: ScheduleMeetingFormProps) {
-  const { user } = useAuth()
+  const { user, users, refreshUsers } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
@@ -58,6 +58,9 @@ export function ScheduleMeetingForm({ onSuccess, onCancel, initialDate }: Schedu
     resolver: zodResolver(meetingFormSchema),
     defaultValues,
   })
+
+  // Only allow owners as selectable targets
+  const ownerUsers = users.filter(u => u.role === "owner")
 
   // Handle form submission
   const onSubmit = async (data: MeetingFormValues) => {
@@ -168,6 +171,7 @@ export function ScheduleMeetingForm({ onSuccess, onCancel, initialDate }: Schedu
                       }}
                       selectedUsers={selectedUser ? [selectedUser] : []}
                       maxUsers={1}
+                      users={ownerUsers}
                     />
                   </FormControl>
                   <FormMessage />

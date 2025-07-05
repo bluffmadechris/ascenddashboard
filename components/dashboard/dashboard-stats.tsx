@@ -89,8 +89,10 @@ export function DashboardStats() {
     loadStats()
 
     // Listen for storage events to refresh the stats
-    const handleStorageChange = () => {
-      loadStats()
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "strikes") {
+        loadStats()
+      }
     }
 
     window.addEventListener("storage", handleStorageChange)

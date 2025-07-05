@@ -392,6 +392,8 @@ class ApiClient {
     client_id?: number;
     type?: string;
     status?: string;
+    all_day?: boolean;
+    created_by: string;
   }): Promise<ApiResponse<{ event: any }>> {
     return this.post<{ event: any }>('/calendar/events', eventData);
   }
@@ -509,6 +511,18 @@ class ApiClient {
 
   async denyPasswordChangeRequest(requestId: string): Promise<ApiResponse> {
     return this.post(`/auth/password-change-requests/${requestId}/deny`);
+  }
+
+  async updateInvoiceStatus(invoiceId: string, status: string): Promise<ApiResponse<any>> {
+    const response = await this.put(`/invoices/status/${invoiceId}`, { status });
+    if (!response.success && response.data) {
+      return {
+        success: false,
+        message: response.message || 'Failed to update invoice status',
+        data: response.data
+      };
+    }
+    return response;
   }
 }
 

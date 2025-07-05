@@ -26,12 +26,13 @@ interface CreateEventDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   selectedDate?: Date
-  onEventCreated: () => void
+  onEventCreated: (event: any) => void
 }
 
 export function CreateEventDialog({ open, onOpenChange, selectedDate, onEventCreated }: CreateEventDialogProps) {
-  const { user, users } = useAuth()
+  const { user, users, refreshUsers } = useAuth()
   const { toast } = useToast()
+  const isOwner = user?.role === "owner"
 
   // Form state
   const [title, setTitle] = useState("")
@@ -129,80 +130,66 @@ export function CreateEventDialog({ open, onOpenChange, selectedDate, onEventCre
   }
 
   // Handle form submission
-  const handleSubmit = async () => {
-    if (!user) return
-
-    // Validation
-    if (!title.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter an event title",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const start = getStartDateTime()
-    const end = getEndDateTime()
-
-    if (!start || !end) {
-      toast({
-        title: "Error",
-        description: "Please select valid start and end times",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (start >= end) {
-      toast({
-        title: "Error",
-        description: "End time must be after start time",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setIsSubmitting(true)
-
+  const handleCreateEvent = async () => {
     try {
-      // Create event using API
-      const newEvent = {
-        title: title.trim(),
-        description: description.trim(),
-        location: location.trim(),
-        start: start.toISOString(),
-        end: end.toISOString(),
-        type: eventType as any,
-        status: "confirmed" as const,
-        createdBy: user.id,
+      // Format dates properly
+      const startDateTime = new Date(
+        startDate!.getFullYear(),
+        startDate!.getMonth(),
+        startDate!.getDate(),
+        ...startTime.split(':').map(Number)
+      ).toISOString()
+
+      const endDateTime = new Date(
+        endDate!.getFullYear(),
+        endDate!.getMonth(),
+        endDate!.getDate(),
+        ...endTime.split(':').map(Number)
+      ).toISOString()
+
+      const eventData = {
+        title,
+        description,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        location,
         attendees: selectedParticipants,
-        allDay: isAllDay,
-        color: getUserCalendarColor(user.id),
+        all_day: isAllDay,
+        type: eventType,
+        created_by: user?.id
       }
 
-      const createdEvent = await createCalendarEvent(newEvent)
+      const response = await createCalendarEvent(eventData)
 
-      if (createdEvent) {
-        toast({
-          title: "Event created successfully",
-          description: "Event has been added to your calendar",
-        })
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to create event')
+      }
 
-        onEventCreated()
-        onOpenChange(false)
-      } else {
-        throw new Error("Failed to create event")
+      toast({
+        title: "Success",
+        description: "Event created successfully",
+      })
+
+      // Clear form
+      setTitle("")
+      setDescription("")
+      setLocation("")
+      setSelectedParticipants([])
+      setIsAllDay(false)
+      setEventType("meeting")
+
+      // Close dialog and notify parent
+      onOpenChange(false)
+      if (onEventCreated) {
+        onEventCreated(response.data.event)
       }
     } catch (error) {
-      console.error("Error creating event:", error)
+      console.error('Error creating event:', error)
       toast({
         title: "Error",
-        description: "Failed to create event. Please try again.",
+        description: error.message || "Failed to create event. Please try again.",
         variant: "destructive",
       })
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -359,29 +346,25 @@ export function CreateEventDialog({ open, onOpenChange, selectedDate, onEventCre
             </div>
           </div>
 
-          {/* Participants */}
-          <div className="space-y-2">
-            <Label>Participants</Label>
-            <div className="border rounded-md p-3 max-h-32 overflow-y-auto">
-              <div className="space-y-2">
-                {users.map((u) => (
-                  <div key={u.id} className="flex items-center space-x-2">
+          {/* Participant Selection - Only visible to owners */}
+          {isOwner && (
+            <div className="space-y-2">
+              <Label>Participants</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {users?.map((participant) => (
+                  <div key={participant.id} className="flex items-center space-x-2">
                     <Checkbox
-                      id={`user-${u.id}`}
-                      checked={selectedParticipants.includes(u.id)}
-                      onCheckedChange={() => toggleParticipant(u.id)}
+                      id={`participant-${participant.id}`}
+                      checked={selectedParticipants.includes(participant.id)}
+                      onCheckedChange={() => toggleParticipant(participant.id)}
+                      disabled={participant.id === user?.id} // Can't unselect self
                     />
-                    <Label htmlFor={`user-${u.id}`} className="flex-1 cursor-pointer">
-                      {u.name}
-                    </Label>
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {u.role.replace("_", " ")}
-                    </span>
+                    <Label htmlFor={`participant-${participant.id}`}>{participant.name}</Label>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Team Availability Display */}
           {selectedParticipants.length > 0 && startDate && (
@@ -436,7 +419,7 @@ export function CreateEventDialog({ open, onOpenChange, selectedDate, onEventCre
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
+          <Button onClick={handleCreateEvent} disabled={isSubmitting}>
             {isSubmitting ? "Creating..." : "Create Event"}
           </Button>
         </DialogFooter>

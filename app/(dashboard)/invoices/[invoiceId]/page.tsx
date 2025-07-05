@@ -187,40 +187,28 @@ export default function InvoiceDetailsPage() {
     }
 
     try {
-      const response = await apiClient.updateInvoice(invoiceId, {
-        ...invoice,
-        status: newStatus
-      })
+      const response = await apiClient.updateInvoiceStatus(invoiceId, newStatus)
+      console.log('Invoice status update response:', response)
 
-      if (response.success) {
-        setInvoice({ ...invoice, status: newStatus })
-
-        // Send notification for status change
-        if (newStatus === "approved" || newStatus === "paid") {
-          await apiClient.createNotification({
-            type: "INVOICE_STATUS_CHANGE",
-            title: `Invoice ${invoice.invoice_number} ${newStatus}`,
-            message: `Invoice ${invoice.invoice_number} has been marked as ${newStatus}`,
-            userId: invoice.created_by,
-            metadata: {
-              invoiceId: invoiceId,
-              status: newStatus
-            }
-          })
-        }
-
+      if (!response.success) {
         toast({
-          title: "Status Updated",
-          description: `Invoice status has been updated to ${newStatus}.`,
+          title: "Error",
+          description: response.message || "Failed to update invoice status. Please try again.",
+          variant: "destructive",
         })
-      } else {
-        throw new Error(response.message || "Failed to update status")
+        return
       }
-    } catch (err) {
+
+      setInvoice(response.data)
+      toast({
+        title: "Status Updated",
+        description: `Invoice status has been updated to ${newStatus} and notifications sent.`,
+      })
+    } catch (err: any) {
       console.error("Error updating invoice status:", err)
       toast({
         title: "Error",
-        description: "Failed to update invoice status. Please try again.",
+        description: err.message || "Failed to update invoice status. Please try again.",
         variant: "destructive",
       })
     }

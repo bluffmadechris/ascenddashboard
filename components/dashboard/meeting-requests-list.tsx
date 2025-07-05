@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs as UITabs, TabsList as UITabsList, TabsTrigger as UITabsTrigger, TabsContent as UITabsContent } from "@/components/ui/tabs"
 import { CalendarIcon, Check, Clock, X, Trash2, CalendarPlus, AlertCircle } from "lucide-react"
 import { format, parseISO, isValid, addHours, isBefore, isSameDay } from "date-fns"
 import { useAuth } from "@/lib/auth-context"
@@ -52,21 +52,22 @@ export function MeetingRequestsList() {
   const [responseMessage, setResponseMessage] = useState("")
   const [scheduledDate, setScheduledDate] = useState<Date | undefined>(undefined)
   const [calendarOpen, setCalendarOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<MeetingRequestStatus | "all">("all")
+  const [activeTab, setActiveTab] = useState<string>(user?.role === "owner" ? "received" : "sent")
+  const [statusTab, setStatusTab] = useState<MeetingRequestStatus | "all">("all")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [conflictDetected, setConflictDetected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Load meeting requests
+  // Load meeting requests based on activeTab (sent/received)
   useEffect(() => {
     if (!user) return
-
     const fetchRequests = async () => {
       setIsLoading(true)
       setError(null)
       try {
-        const userRequests = await getMeetingRequestsForUser(user.id, user.role === "owner" ? "target" : "requester")
+        const type = activeTab === "received" ? "owner" : "requester"
+        const userRequests = await getMeetingRequestsForUser(user.id, type)
         setRequests(userRequests)
       } catch (error) {
         setError("Failed to load meeting requests. Please try again.")
@@ -75,12 +76,11 @@ export function MeetingRequestsList() {
         setIsLoading(false)
       }
     }
-
     fetchRequests()
-  }, [user])
+  }, [user, activeTab])
 
-  // Filter requests based on active tab
-  const filteredRequests = activeTab === "all" ? requests : requests.filter((request) => request.status === activeTab)
+  // Filter requests based on statusTab
+  const filteredRequests = statusTab === "all" ? requests : requests.filter((request) => request.status === statusTab)
 
   // Group requests by status for counts
   const requestCounts = requests.reduce(
@@ -311,172 +311,179 @@ export function MeetingRequestsList() {
     )
   }
 
-  if (!requests.length) {
-    return (
-      <div className="flex flex-col items-center justify-center p-8 space-y-4">
-        <CalendarPlus className="h-8 w-8 text-muted-foreground" />
-        <p className="text-muted-foreground">No meeting requests found</p>
-      </div>
-    )
-  }
-
+  // Always render the tabs, even if there are no requests
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Meeting Requests</h2>
-        {canManageRequests && (
-          <Button onClick={() => window.location.href = "/schedule-meeting"}>
-            <CalendarPlus className="h-4 w-4 mr-2" />
-            Request Meeting
-          </Button>
-        )}
-      </div>
+    <div>
+      <UITabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
+        <UITabsList>
+          <UITabsTrigger value="received">Received</UITabsTrigger>
+          <UITabsTrigger value="sent">Sent</UITabsTrigger>
+        </UITabsList>
+      </UITabs>
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h2 className="text-2xl font-bold">Meeting Requests</h2>
+          {canManageRequests && (
+            <Button onClick={() => window.location.href = "/schedule-meeting"}>
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              Request Meeting
+            </Button>
+          )}
+        </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as MeetingRequestStatus | "all")}>
-        <TabsList>
-          <TabsTrigger value="all">
-            All <Badge variant="secondary" className="ml-2">{requests.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="pending">
-            Pending <Badge variant="secondary" className="ml-2">{requestCounts.pending || 0}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="approved">
-            Approved <Badge variant="secondary" className="ml-2">{requestCounts.approved || 0}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="rejected">
-            Rejected <Badge variant="secondary" className="ml-2">{requestCounts.rejected || 0}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="cancelled">
-            Cancelled <Badge variant="secondary" className="ml-2">{requestCounts.cancelled || 0}</Badge>
-          </TabsTrigger>
-        </TabsList>
+        <UITabs value={statusTab} onValueChange={(value) => setStatusTab(value as MeetingRequestStatus | "all")}>
+          <UITabsList>
+            <UITabsTrigger value="all">
+              All <Badge variant="secondary" className="ml-2">{requests.length}</Badge>
+            </UITabsTrigger>
+            <UITabsTrigger value="pending">
+              Pending <Badge variant="secondary" className="ml-2">{requestCounts.pending || 0}</Badge>
+            </UITabsTrigger>
+            <UITabsTrigger value="approved">
+              Approved <Badge variant="secondary" className="ml-2">{requestCounts.approved || 0}</Badge>
+            </UITabsTrigger>
+            <UITabsTrigger value="rejected">
+              Rejected <Badge variant="secondary" className="ml-2">{requestCounts.rejected || 0}</Badge>
+            </UITabsTrigger>
+            <UITabsTrigger value="cancelled">
+              Cancelled <Badge variant="secondary" className="ml-2">{requestCounts.cancelled || 0}</Badge>
+            </UITabsTrigger>
+          </UITabsList>
 
-        <TabsContent value={activeTab} className="space-y-4">
-          {filteredRequests.map((request) => (
-            <Card key={request.id}>
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle>{request.subject}</CardTitle>
-                    <CardDescription>
-                      Requested from {request.requesterName || "Unknown"}
-                    </CardDescription>
-                  </div>
-                  <Badge variant={request.status === "pending" ? "default" : request.status === "approved" ? "success" : "destructive"}>
-                    {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {request.description && (
-                  <div>
-                    <Label>Details:</Label>
-                    <p className="text-sm text-muted-foreground">{request.description}</p>
-                  </div>
-                )}
-                <div>
-                  <Label>Proposed Date & Time:</Label>
-                  <p className="text-sm text-muted-foreground">{formatDate(request.proposedDateTime)}</p>
-                </div>
-                <div>
-                  <Label>Requested on:</Label>
-                  <p className="text-sm text-muted-foreground">{formatDate(request.createdAt)}</p>
-                </div>
-                {request.responseMessage && (
-                  <div>
-                    <Label>Response:</Label>
-                    <p className="text-sm text-muted-foreground">{request.responseMessage}</p>
-                  </div>
-                )}
-              </CardContent>
-              {canManageRequests && (
-                <CardFooter className="flex justify-end space-x-2">
-                  {request.status === "pending" && (
-                    <>
-                      <Button
-                        variant="default"
-                        onClick={() => handleRespond(request, "approved")}
-                        disabled={isSubmitting}
-                      >
-                        <Check className="h-4 w-4 mr-2" />
-                        Approve
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleRespond(request, "rejected")}
-                        disabled={isSubmitting}
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Reject
-                      </Button>
-                    </>
+          <UITabsContent value={statusTab} className="space-y-4">
+            {filteredRequests.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 space-y-4">
+                <CalendarPlus className="h-8 w-8 text-muted-foreground" />
+                <p className="text-muted-foreground">No meeting requests found</p>
+              </div>
+            ) : (
+              filteredRequests.map((request) => (
+                <Card key={request.id}>
+                  <CardHeader>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle>{request.subject}</CardTitle>
+                        <CardDescription>
+                          Requested from {request.requesterName || "Unknown"}
+                        </CardDescription>
+                      </div>
+                      <Badge variant={request.status === "pending" ? "default" : request.status === "approved" ? "success" : "destructive"}>
+                        {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {request.description && (
+                      <div>
+                        <Label>Details:</Label>
+                        <p className="text-sm text-muted-foreground">{request.description}</p>
+                      </div>
+                    )}
+                    <div>
+                      <Label>Proposed Date & Time:</Label>
+                      <p className="text-sm text-muted-foreground">{formatDate(request.proposedDateTime)}</p>
+                    </div>
+                    <div>
+                      <Label>Requested on:</Label>
+                      <p className="text-sm text-muted-foreground">{formatDate(request.createdAt)}</p>
+                    </div>
+                    {request.responseMessage && (
+                      <div>
+                        <Label>Response:</Label>
+                        <p className="text-sm text-muted-foreground">{request.responseMessage}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                  {canManageRequests && (
+                    <CardFooter className="flex justify-end space-x-2">
+                      {request.status === "pending" && (
+                        <>
+                          <Button
+                            variant="default"
+                            onClick={() => handleRespond(request, "approved")}
+                            disabled={isSubmitting}
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            Approve
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => handleRespond(request, "rejected")}
+                            disabled={isSubmitting}
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      {(request.status === "pending" || request.status === "approved") && (
+                        <Button
+                          variant="outline"
+                          onClick={() => handleDelete(request)}
+                          disabled={isSubmitting}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </Button>
+                      )}
+                    </CardFooter>
                   )}
-                  {(request.status === "pending" || request.status === "approved") && (
-                    <Button
-                      variant="outline"
-                      onClick={() => handleDelete(request)}
-                      disabled={isSubmitting}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </Button>
-                  )}
-                </CardFooter>
-              )}
-            </Card>
-          ))}
-        </TabsContent>
-      </Tabs>
+                </Card>
+              ))
+            )}
+          </UITabsContent>
+        </UITabs>
 
-      {/* Response Dialog */}
-      <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Respond to Meeting Request</DialogTitle>
-            <DialogDescription>
-              {selectedRequest?.status === "approved"
-                ? "Approve this meeting request and send a response to the requester."
-                : "Reject this meeting request and provide a reason to the requester."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Response Message (Optional)</Label>
-              <Textarea
-                value={responseMessage}
-                onChange={(e) => setResponseMessage(e.target.value)}
-                placeholder="Enter your response..."
-              />
+        {/* Response Dialog */}
+        <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Respond to Meeting Request</DialogTitle>
+              <DialogDescription>
+                {selectedRequest?.status === "approved"
+                  ? "Approve this meeting request and send a response to the requester."
+                  : "Reject this meeting request and provide a reason to the requester."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label>Response Message (Optional)</Label>
+                <Textarea
+                  value={responseMessage}
+                  onChange={(e) => setResponseMessage(e.target.value)}
+                  placeholder="Enter your response..."
+                />
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setResponseDialogOpen(false)} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button onClick={submitResponse} disabled={isSubmitting}>
-              {isSubmitting ? "Sending..." : "Send Response"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setResponseDialogOpen(false)} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button onClick={submitResponse} disabled={isSubmitting}>
+                {isSubmitting ? "Sending..." : "Send Response"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Delete Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Meeting Request</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this meeting request? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={submitDelete} disabled={isSubmitting}>
-              {isSubmitting ? "Deleting..." : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {/* Delete Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Meeting Request</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this meeting request? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={submitDelete} disabled={isSubmitting}>
+                {isSubmitting ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   )
 }

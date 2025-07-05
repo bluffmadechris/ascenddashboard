@@ -97,8 +97,6 @@ export const generateInvoicePDF = async (rawInvoice: any): Promise<boolean> => {
     doc.setFont("helvetica", "normal")
     doc.text("Date:", 140, 45)
     doc.text(formatDate(invoice.date), 170, 45)
-    doc.text("Due Date:", 140, 52)
-    doc.text(formatDate(invoice.dueDate), 170, 52)
 
     // Add Balance Due
     doc.setFontSize(12)

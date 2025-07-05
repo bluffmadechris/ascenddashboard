@@ -135,6 +135,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isApiConnected, user])
 
+  // Ensure users are refreshed before rendering meeting forms
+  useEffect(() => {
+    if (isApiConnected) {
+      refreshUsers()
+    }
+  }, [])
+
   // Initialize default users if none exist
   const initializeDefaultUsers = () => {
     const existingUsers = loadData("users", [])

@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useUser } from "@/lib/hooks/use-user"
 import { getMeetingRequestsForUser } from "@/lib/meeting-request"
+import { getUpcomingEvents } from "@/lib/calendar-utils"
 
 // Types for news items
 type NewsItemType = "meeting" | "task" | "announcement"
@@ -40,7 +41,7 @@ export function UpcomingEvents() {
 
   // Load news items from various sources
   useEffect(() => {
-    const loadNewsItems = () => {
+    const loadNewsItems = async () => {
       const items: NewsItem[] = []
 
       // Load meeting requests for the current user
@@ -89,39 +90,27 @@ export function UpcomingEvents() {
         items.push(...filteredNewsItems)
       }
 
-      // Load calendar events
-      const calendarEvents = loadData("calendar-events", [])
-      if (Array.isArray(calendarEvents)) {
-        // Only include upcoming events (next 30 days)
-        const now = new Date()
-        const thirtyDaysLater = new Date(now)
-        thirtyDaysLater.setDate(now.getDate() + 30)
-
-        const relevantEvents = calendarEvents.filter((event) => {
-          // Skip if not assigned to current user
-          if (user && !event.assignedTo?.includes(user.id)) return false
-
-          const eventDate = new Date(event.start)
-          return eventDate >= now && eventDate <= thirtyDaysLater
-        })
-
-        relevantEvents.forEach((event) => {
-          // Skip if already included from news-items
-          if (items.some((item) => item.eventId === event.id)) return
-
-          items.push({
-            id: `calendar-${event.id}`,
-            type: "meeting",
-            title: event.title,
-            description: event.description || "No description provided",
-            date: event.start,
-            priority: event.priority || "medium",
-            status: "pending",
-            link: "/calendar",
-            relatedTo: event.title,
-            eventId: event.id,
+      // Load upcoming calendar events from API
+      if (user) {
+        try {
+          const upcomingEvents = await getUpcomingEvents(user.id, 10)
+          upcomingEvents.forEach(event => {
+            items.push({
+              id: `calendar-${event.id}`,
+              type: "meeting",
+              title: event.title,
+              description: event.description || "No description provided",
+              date: event.start,
+              priority: event.priority || "medium",
+              status: event.status,
+              link: "/calendar",
+              relatedTo: event.title,
+              eventId: event.id,
+            })
           })
-        })
+        } catch (error) {
+          console.error('Error loading upcoming events:', error)
+        }
       }
 
       // Sort by date (soonest first)

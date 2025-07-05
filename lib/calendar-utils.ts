@@ -1,6 +1,6 @@
 import { ApiClient } from "./api-client"
 import { generateId } from "./uuid"
-import { format, addDays, addWeeks, addMonths, addYears, getDay, parseISO } from "date-fns"
+import { format, addDays, addWeeks, addMonths, addYears, getDay, parseISO, isValid } from "date-fns"
 
 // Create API client instance
 const apiClient = new ApiClient()
@@ -131,31 +131,81 @@ export async function loadCalendarEvents(): Promise<CalendarEvent[]> {
   try {
     const response = await apiClient.getCalendarEvents()
     if (response.success && response.data?.events) {
-      return response.data.events.map(transformApiEventToCalendarEvent)
+      let dropped = 0;
+      const transformedEvents = response.data.events.map((event, index) => {
+        try {
+          const transformed = transformApiEventToCalendarEvent(event)
+          return transformed
+        } catch (err) {
+          dropped++;
+          return null;
+        }
+      }).filter(Boolean)
+      if (dropped > 0) {
+        return transformedEvents
+      }
+      return transformedEvents
     }
     return []
   } catch (error) {
-    console.error("Error loading calendar events:", error)
     return []
   }
 }
 
 // Transform API event to CalendarEvent format
 function transformApiEventToCalendarEvent(apiEvent: any): CalendarEvent {
-  return {
+  // Parse dates first to validate them
+  const startTime = apiEvent.start_time || apiEvent.start
+  const endTime = apiEvent.end_time || apiEvent.end
+  
+  if (!startTime || !endTime) {
+    throw new Error('Invalid event: missing start or end time')
+  }
+
+  // Parse attendees
+  let parsedAttendees: string[] = []
+  try {
+    if (typeof apiEvent.attendees === 'string') {
+      // Try to parse as JSON first
+      try {
+        const parsed = JSON.parse(apiEvent.attendees)
+        if (Array.isArray(parsed)) {
+          parsedAttendees = parsed.map(String)
+        } else if (parsed instanceof Set) {
+          parsedAttendees = Array.from(parsed).map(String)
+        } else {
+          // Handle single value
+          parsedAttendees = [String(parsed)]
+        }
+      } catch {
+        // If JSON parsing fails, try to clean the string
+        parsedAttendees = apiEvent.attendees
+          .replace(/[{}"\\]/g, '')
+          .split(',')
+          .filter(Boolean)
+          .map(String)
+      }
+    } else if (Array.isArray(apiEvent.attendees)) {
+      parsedAttendees = apiEvent.attendees.map(String)
+    }
+  } catch (error) {
+    parsedAttendees = []
+  }
+
+  const event = {
     id: apiEvent.id?.toString() || generateId(),
     title: apiEvent.title || "",
     description: apiEvent.description || "",
     location: apiEvent.location || "",
-    start: apiEvent.start_time || apiEvent.start || new Date().toISOString(),
-    end: apiEvent.end_time || apiEvent.end || new Date().toISOString(),
+    start: startTime,
+    end: endTime,
     allDay: false, // API doesn't have allDay field yet
     type: "meeting" as EventType,
     status: "confirmed" as EventStatus,
     color: "#3b82f6", // Default blue color
     createdBy: apiEvent.created_by?.toString() || apiEvent.createdBy || "",
-    attendees: parseAttendees(apiEvent.attendees),
-    assignedTo: parseAttendees(apiEvent.attendees), // For compatibility
+    attendees: parsedAttendees,
+    assignedTo: parsedAttendees, // For compatibility
     createdAt: apiEvent.created_at || new Date().toISOString(),
     updatedAt: apiEvent.updated_at || new Date().toISOString(),
     client_id: apiEvent.client_id,
@@ -163,6 +213,21 @@ function transformApiEventToCalendarEvent(apiEvent: any): CalendarEvent {
     client_company: apiEvent.client_company,
     created_by_name: apiEvent.created_by_name,
   }
+
+  // Validate the transformed event
+  const validation = {
+    hasValidStart: isValid(parseISO(event.start)),
+    hasValidEnd: isValid(parseISO(event.end)),
+    hasTitle: Boolean(event.title),
+    hasId: Boolean(event.id),
+    hasCreatedBy: Boolean(event.createdBy),
+    attendeesCount: event.attendees.length,
+    createdByType: typeof event.createdBy,
+    createdByValue: event.createdBy
+  }
+
+  // Always return the event object
+  return event;
 }
 
 // Parse attendees from API (could be JSON string or array)
@@ -172,9 +237,18 @@ function parseAttendees(attendees: any): string[] {
   if (typeof attendees === 'string') {
     try {
       const parsed = JSON.parse(attendees)
-      return Array.isArray(parsed) ? parsed.map(String) : []
-    } catch {
+      // Handle both array and single value formats
+      if (Array.isArray(parsed)) {
+        return parsed.map(String)
+      } else if (parsed instanceof Set) {
+        return Array.from(parsed).map(String)
+      } else if (typeof parsed === 'number' || typeof parsed === 'string') {
+        return [String(parsed)]
+      }
       return []
+    } catch {
+      // If parsing fails, try to handle it as a raw string
+      return attendees.replace(/[{}"\\]/g, '').split(',').filter(Boolean).map(String)
     }
   }
   return []
@@ -201,7 +275,6 @@ export function loadCalendarCategories(): CalendarCategory[] {
     const categories = JSON.parse(localStorage.getItem("ascend-media-calendar-categories") || "[]")
     return Array.isArray(categories) ? categories : []
   } catch (error) {
-    console.error("Error loading calendar categories:", error)
     return []
   }
 }
@@ -210,12 +283,10 @@ export function loadCalendarCategories(): CalendarCategory[] {
 export function saveCalendarCategories(categories: CalendarCategory[]): void {
   try {
     if (!Array.isArray(categories)) {
-      console.error("Attempted to save non-array calendar categories")
       return
     }
     localStorage.setItem("ascend-media-calendar-categories", JSON.stringify(categories))
   } catch (error) {
-    console.error("Error saving calendar categories:", error)
   }
 }
 
@@ -249,7 +320,6 @@ export function loadUserAvailability(userId: string): Availability {
 
     return availability as Availability
   } catch (error) {
-    console.error("Error loading user availability:", error)
     // Return default availability on error
     const defaultAvail = getDefaultAvailability(userId)
     saveUserAvailability(defaultAvail)
@@ -261,12 +331,10 @@ export function loadUserAvailability(userId: string): Availability {
 export function saveUserAvailability(availability: Availability): void {
   try {
     if (!availability.userId) {
-      console.error("Attempted to save availability without userId")
       return
     }
     localStorage.setItem(`ascend-media-availability-${availability.userId}`, JSON.stringify(availability))
   } catch (error) {
-    console.error("Error saving user availability:", error)
   }
 }
 
@@ -338,7 +406,6 @@ export function createUnavailableTimeSlot(
 
     return newSlot
   } catch (error) {
-    console.error("Error creating unavailable time slot:", error)
     return null
   }
 }
@@ -365,7 +432,6 @@ export function deleteUnavailableTimeSlot(userId: string, slotId: string, delete
     saveUserAvailability(availability)
     return true
   } catch (error) {
-    console.error("Error deleting unavailable time slot:", error)
     return false
   }
 }
@@ -399,7 +465,6 @@ export function isTimeUnavailable(userId: string, date: Date, startTime?: string
       return !(endTime <= slotStart || startTime >= slotEnd)
     })
   } catch (error) {
-    console.error("Error checking if time is unavailable:", error)
     return false
   }
 }
@@ -413,7 +478,6 @@ export function getUnavailableTimeSlots(userId: string, date: Date): Unavailable
     const dateStr = format(date, "yyyy-MM-dd")
     return availability.unavailableSlots.filter((slot) => slot.date === dateStr)
   } catch (error) {
-    console.error("Error getting unavailable time slots:", error)
     return []
   }
 }
@@ -452,7 +516,6 @@ export function getUnavailableSlotEvents(userId: string): CalendarEvent[] {
 
     return events
   } catch (error) {
-    console.error("Error getting unavailable slot events:", error)
     return []
   }
 }
@@ -507,23 +570,43 @@ function generateRecurringUnavailableSlots(userId: string, parentSlot: Unavailab
 
     saveUserAvailability(availability)
   } catch (error) {
-    console.error("Error generating recurring unavailable slots:", error)
   }
 }
 
 // Create a new calendar event using API
-export async function createCalendarEvent(event: Omit<CalendarEvent, "id" | "createdAt" | "updatedAt">): Promise<CalendarEvent> {
+export async function createCalendarEvent(event: any): Promise<any> {
   try {
-    const apiEvent = transformCalendarEventToApi(event)
-    const response = await apiClient.createCalendarEvent(apiEvent)
-    
-    if (response.success && response.data?.event) {
-      return transformApiEventToCalendarEvent(response.data.event)
-    } else {
-      throw new Error(response.message || "Failed to create calendar event")
+    // Ensure attendees is a JSON string if it's an array
+    const eventData = {
+      ...event,
+      attendees: Array.isArray(event.attendees) ? JSON.stringify(event.attendees) : event.attendees
     }
+
+    const response = await apiClient.createCalendarEvent(eventData)
+    if (!response.success) {
+      throw new Error(response.message || 'Failed to create event')
+    }
+
+    // Transform the response data to match the CalendarEvent interface
+    if (response.data?.event) {
+      const transformedEvent = {
+        ...response.data.event,
+        start: response.data.event.start_time,
+        end: response.data.event.end_time,
+        attendees: Array.isArray(response.data.event.attendees) 
+          ? response.data.event.attendees 
+          : JSON.parse(response.data.event.attendees || '[]'),
+        allDay: response.data.event.all_day || false,
+        createdBy: response.data.event.created_by
+      }
+      return {
+        success: true,
+        data: { event: transformedEvent }
+      }
+    }
+
+    return response
   } catch (error) {
-    console.error("Error creating calendar event:", error)
     throw error
   }
 }
@@ -541,11 +624,9 @@ export async function updateCalendarEvent(
     if (response.success && response.data?.event) {
       return transformApiEventToCalendarEvent(response.data.event)
     } else {
-      console.error("Failed to update calendar event:", response.message)
       return null
     }
   } catch (error) {
-    console.error("Error updating calendar event:", error)
     return null
   }
 }
@@ -558,11 +639,9 @@ export async function deleteCalendarEvent(eventId: string, deleteRecurring = fal
     if (response.success) {
       return true
     } else {
-      console.error("Failed to delete calendar event:", response.message)
       return false
     }
   } catch (error) {
-    console.error("Error deleting calendar event:", error)
     return false
   }
 }
@@ -581,7 +660,6 @@ export function createCalendarCategory(category: Omit<CalendarCategory, "id">): 
 
     return newCategory
   } catch (error) {
-    console.error("Error creating calendar category:", error)
     throw error
   }
 }
@@ -605,7 +683,6 @@ export function updateCalendarCategory(
     saveCalendarCategories(categories)
     return categories[index]
   } catch (error) {
-    console.error("Error updating calendar category:", error)
     return null
   }
 }
@@ -621,7 +698,6 @@ export function deleteCalendarCategory(categoryId: string): boolean {
     saveCalendarCategories(filteredCategories)
     return true
   } catch (error) {
-    console.error("Error deleting calendar category:", error)
     return false
   }
 }
@@ -638,7 +714,6 @@ export async function getEventsInRange(start: Date, end: Date): Promise<Calendar
       return eventStart <= end && eventEnd >= start
     })
   } catch (error) {
-    console.error("Error getting events in range:", error)
     return []
   }
 }
@@ -675,7 +750,6 @@ export async function getEventsForDate(date: Date): Promise<CalendarEvent[]> {
       return eventStart <= endOfDay && eventEnd >= startOfDay
     })
   } catch (error) {
-    console.error("Error getting events for date:", error)
     return []
   }
 }
@@ -817,7 +891,6 @@ export async function getUpcomingEvents(userId: string, limit = 5): Promise<Cale
       })
       .slice(0, limit)
   } catch (error) {
-    console.error("Error getting upcoming events:", error)
     return []
   }
 }
@@ -872,9 +945,6 @@ export function processReminders(): void {
 
         // Check if it's time to send the reminder
         if (now >= reminderTime) {
-          // In a real app, this would send an actual notification
-          console.log(`Reminder for event: ${event.title} at ${format(eventStart, "PPpp")}`)
-
           // Mark the reminder as sent
           reminder.sent = true
           updated = true
@@ -886,7 +956,6 @@ export function processReminders(): void {
       saveCalendarEvents(events)
     }
   } catch (error) {
-    console.error("Error processing reminders:", error)
   }
 }
 
@@ -902,7 +971,6 @@ export function formatEventTime(event: CalendarEvent): string {
 
     return `${format(start, "h:mm a")} - ${format(end, "h:mm a")}`
   } catch (error) {
-    console.error("Error formatting event time:", error)
     return "Invalid time"
   }
 }
@@ -975,7 +1043,6 @@ export async function getUserEvents(userId: string): Promise<CalendarEvent[]> {
     const events = await loadCalendarEvents()
     return events.filter((e) => e.createdBy === userId || e.attendees?.includes(userId))
   } catch (error) {
-    console.error("Error getting user events:", error)
     return []
   }
 }
@@ -1187,7 +1254,6 @@ export function getAvailabilityStatus(
     // If we got here, the time is available
     return { available: true }
   } catch (error) {
-    console.error("Error checking availability status:", error)
     return { available: false, reason: "Error checking availability" }
   }
 }
@@ -1205,7 +1271,6 @@ export async function getEventsForUsers(userIds: string[]): Promise<CalendarEven
       )
     })
   } catch (error) {
-    console.error("Error getting events for users:", error)
     return []
   }
 }

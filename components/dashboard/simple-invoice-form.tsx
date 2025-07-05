@@ -138,8 +138,8 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
         amount: total,
         currency: "USD",
         status: initialStatus,
-        issue_date: invoiceDate.toISOString().split('T')[0],
-        due_date: new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from issue
+        issue_date: format(invoiceDate, 'yyyy-MM-dd'),
+        due_date: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
         description: invoiceName,
         created_by_name: user?.name || "Unknown",
         items: items.map(item => ({
@@ -157,22 +157,7 @@ export function SimpleInvoiceForm({ onSubmit, initialData }: SimpleInvoiceFormPr
         throw new Error(response.message || 'Failed to create invoice')
       }
 
-      // Send notifications if invoice is approved or paid
-      if (initialStatus === "approved") {
-        await apiClient.createNotification({
-          type: "INVOICE_APPROVED",
-          title: "Invoice Approved",
-          message: `Invoice ${invoiceNumber} has been approved.`,
-          data: { invoiceId: response.data.id }
-        })
-      } else if (initialStatus === "paid") {
-        await apiClient.createNotification({
-          type: "INVOICE_PAID",
-          title: "Invoice Paid",
-          message: `Invoice ${invoiceNumber} has been marked as paid.`,
-          data: { invoiceId: response.data.id }
-        })
-      }
+      // No need to send notification here; backend handles status notifications
 
       setIsLoading(false)
       setOpen(false)

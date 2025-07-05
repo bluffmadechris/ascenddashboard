@@ -37,7 +37,7 @@ export function ScheduleEmployeeMeeting({
   selectedDate,
   onMeetingScheduled,
 }: ScheduleEmployeeMeetingProps) {
-  const { user, users } = useAuth()
+  const { user, users, refreshUsers } = useAuth()
   const { toast } = useToast()
 
   // Meeting form state
@@ -72,8 +72,8 @@ export function ScheduleEmployeeMeeting({
       setEndDate(initialEndDate)
       setEndTime(
         initialEndDate.getHours().toString().padStart(2, "0") +
-          ":" +
-          initialEndDate.getMinutes().toString().padStart(2, "0"),
+        ":" +
+        initialEndDate.getMinutes().toString().padStart(2, "0"),
       )
 
       // Reset other form fields
@@ -132,8 +132,10 @@ export function ScheduleEmployeeMeeting({
     return date
   }
 
+  // Only allow owners to select employees
+  const isOwner = user?.role === "owner"
   // Filter employees (exclude the current user if they're an owner)
-  const employees = users.filter((u) => u.id !== user?.id && u.role !== "owner")
+  const employees = isOwner ? users.filter((u) => u.id !== user?.id && u.role !== "owner") : []
 
   // Get priority color
   const getPriorityColor = (priority: string) => {
@@ -495,17 +497,17 @@ export function ScheduleEmployeeMeeting({
               <div className="flex items-center justify-between">
                 <Label className="text-base font-medium">Employees</Label>
                 <div className="flex items-center space-x-3">
-                  <Button variant="outline" size="sm" onClick={selectAllEmployees} type="button">
+                  <Button variant="outline" size="sm" onClick={selectAllEmployees} type="button" disabled={!isOwner}>
                     Select All
                   </Button>
-                  <Button variant="outline" size="sm" onClick={deselectAllEmployees} type="button">
+                  <Button variant="outline" size="sm" onClick={deselectAllEmployees} type="button" disabled={!isOwner}>
                     Deselect All
                   </Button>
                 </div>
               </div>
               <div className="border rounded-md p-4 max-h-[200px] overflow-y-auto">
                 {employees.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-4">No employees found</div>
+                  <div className="text-center text-muted-foreground py-4">{isOwner ? "No employees found" : "Only owners can select participants."}</div>
                 ) : (
                   <div className="space-y-3">
                     {employees.map((employee) => (
@@ -513,8 +515,9 @@ export function ScheduleEmployeeMeeting({
                         <Checkbox
                           id={`employee-${employee.id}`}
                           checked={selectedEmployees.includes(employee.id)}
-                          onCheckedChange={() => toggleEmployee(employee.id)}
+                          onCheckedChange={() => isOwner && toggleEmployee(employee.id)}
                           className="h-5 w-5"
+                          disabled={!isOwner}
                         />
                         <Label htmlFor={`employee-${employee.id}`} className="cursor-pointer text-base">
                           {employee.name}

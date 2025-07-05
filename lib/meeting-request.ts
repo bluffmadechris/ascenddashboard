@@ -7,6 +7,8 @@ export interface MeetingRequest {
   id: string
   requesterId: string
   targetUserId: string
+  requesterName?: string
+  targetUserName?: string
   subject: string
   description?: string
   status: 'pending' | 'approved' | 'rejected' | 'scheduled'
@@ -34,7 +36,7 @@ function transformMeetingRequest(request: any): MeetingRequest {
 }
 
 // Load meeting requests for a user
-export async function getMeetingRequestsForUser(userId: string, type: 'owner' | 'requester'): Promise<MeetingRequest[]> {
+export async function getMeetingRequestsForUser(userId: string | number, type: 'owner' | 'requester'): Promise<MeetingRequest[]> {
   try {
     const response = await apiClient.getMeetingRequests(type)
     if (response.success && response.data?.requests) {
@@ -49,9 +51,11 @@ export async function getMeetingRequestsForUser(userId: string, type: 'owner' | 
 
 function transformApiRequestToMeetingRequest(apiRequest: any): MeetingRequest {
   return {
-    id: apiRequest.id?.toString() || '',
-    requesterId: apiRequest.requester_id?.toString() || '',
-    targetUserId: apiRequest.target_user_id?.toString() || '',
+    id: Number(apiRequest.id),
+    requesterId: Number(apiRequest.requester_id),
+    targetUserId: Number(apiRequest.target_user_id),
+    requesterName: apiRequest.requester_name,
+    targetUserName: apiRequest.target_user_name,
     subject: apiRequest.subject || '',
     description: apiRequest.description || '',
     status: apiRequest.status || 'pending',
@@ -89,13 +93,13 @@ export async function createMeetingRequest(data: {
       subject: data.subject,
       description: data.description,
       proposed_date: data.proposedDate,
-    };
-    console.log('Sending meeting request data:', requestData);
-    const response = await apiClient.createMeetingRequest(requestData);
+    }
+    const response = await apiClient.createMeetingRequest(requestData)
     if (response.success && response.data?.request) {
       return transformApiRequestToMeetingRequest(response.data.request)
+    } else {
+      throw new Error(response.message || 'Failed to create meeting request')
     }
-    return null
   } catch (error) {
     console.error("Error creating meeting request:", error)
     return null

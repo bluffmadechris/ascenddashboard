@@ -15,6 +15,7 @@ import { ApiClient } from "@/lib/api-client"
 import { toast } from "sonner"
 import { checkUsersAvailability } from "@/lib/availability-utils"
 import { addHours } from "date-fns"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Initialize API client
 const api = new ApiClient();
@@ -27,6 +28,9 @@ export default function MeetingRequestsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedDateTime, setSelectedDateTime] = useState<Date | null>(null)
+  const [targetUserId, setTargetUserId] = useState<string>("")
+  const isOwner = user?.role === "owner"
+  const canRequestMeeting = user && (user.role === "employee" || user.role === "owner")
 
   // Find the owner/CEO to request meetings from
   const owner = users.find(u => u.role === "owner" || u.role === "ceo")
@@ -40,8 +44,9 @@ export default function MeetingRequestsPage() {
       return
     }
 
-    if (!owner) {
-      setError("Invalid meeting target")
+    let targetId = targetUserId
+    if (!targetId) {
+      setError("Please select a user to request a meeting with.")
       return
     }
 
@@ -55,10 +60,10 @@ export default function MeetingRequestsPage() {
       return
     }
 
-    // Check owner's availability (assuming 1-hour meetings)
+    // Check target user's availability (assuming 1-hour meetings)
     const endDateTime = addHours(selectedDateTime, 1)
     const { available, conflicts } = checkUsersAvailability(
-      [owner.id.toString()],
+      [targetId],
       selectedDateTime,
       endDateTime,
       users
@@ -73,8 +78,8 @@ export default function MeetingRequestsPage() {
 
     try {
       const response = await api.createMeetingRequest({
-        targetUserId: owner.id.toString(),
-        proposedDateTime: selectedDateTime.toISOString(),
+        target_user_id: Number(targetId),
+        proposed_date: selectedDateTime.toISOString(),
         subject: subject.trim(),
         description: description.trim()
       })
@@ -87,6 +92,7 @@ export default function MeetingRequestsPage() {
       setSubject("")
       setDescription("")
       setSelectedDateTime(null)
+      setTargetUserId("")
 
       // Close dialog
       setShowRequestDialog(false)
@@ -103,7 +109,7 @@ export default function MeetingRequestsPage() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
-        {user?.role === "employee" && owner && (
+        {canRequestMeeting && (
           <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -113,10 +119,9 @@ export default function MeetingRequestsPage() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[500px]">
               <DialogHeader>
-                <DialogTitle>Request Meeting with {owner.name}</DialogTitle>
+                <DialogTitle>Request Meeting{isOwner ? " with a Team Member" : owner ? ` with ${owner.name}` : ""}</DialogTitle>
                 <DialogDescription>
-                  Fill out the form below to request a meeting. They will be notified and can approve, schedule, or
-                  deny your request. Meetings can only be scheduled during their available hours.
+                  Fill out the form below to request a meeting. The recipient will be notified and can approve, schedule, or deny your request.
                 </DialogDescription>
               </DialogHeader>
 
@@ -129,6 +134,21 @@ export default function MeetingRequestsPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4 py-4">
+                {(isOwner || user?.role === "employee") && (
+                  <div className="space-y-2">
+                    <Label htmlFor="targetUser">Select User *</Label>
+                    <Select value={targetUserId} onValueChange={setTargetUserId} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a user" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.filter(u => u.id !== user.id).map(u => (
+                          <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.role})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="subject">Meeting Subject *</Label>
                   <Input

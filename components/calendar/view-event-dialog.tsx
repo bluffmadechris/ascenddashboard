@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { CalendarEvent } from "@/lib/calendar-utils"
 import { Badge } from "@/components/ui/badge"
+import { ApiClient, User } from "@/lib/api-client"
 
 interface ViewEventDialogProps {
   open: boolean
@@ -42,6 +43,24 @@ export function ViewEventDialog({
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [users, setUsers] = useState<User[]>([])
+  const [userIdToName, setUserIdToName] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    async function fetchUsers() {
+      const api = new ApiClient()
+      const response = await api.getUsers()
+      if (response.success && response.data?.users) {
+        setUsers(response.data.users)
+        const map: Record<string, string> = {}
+        response.data.users.forEach(user => {
+          map[String(user.id)] = user.name || user.email || `User ${user.id}`
+        })
+        setUserIdToName(map)
+      }
+    }
+    fetchUsers()
+  }, [])
 
   // Format date and time
   const formatDateTime = (dateStr: string) => {
@@ -87,8 +106,6 @@ export function ViewEventDialog({
     }
   }
 
-
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,7 +147,7 @@ export function ViewEventDialog({
                 <div className="space-y-1">
                   {event.attendees.map((attendeeId) => (
                     <p key={attendeeId} className="text-sm text-muted-foreground">
-                      User {attendeeId}
+                      {userIdToName[attendeeId] || attendeeId}
                     </p>
                   ))}
                 </div>

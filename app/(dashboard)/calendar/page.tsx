@@ -156,11 +156,21 @@ export default function CalendarPage() {
         } else {
           // Load only current user's events
           const loadedEvents = await loadCalendarEvents()
-          allEvents = loadedEvents.filter(event =>
-            event.createdBy === user.id ||
-            event.attendees?.includes(user.id) ||
-            event.assignedTo?.includes(user.id)
-          )
+
+          // Convert user.id to string for comparison since API returns numbers
+          const userId = String(user.id)
+          const numericUserId = Number(user.id)
+
+          allEvents = loadedEvents.filter(event => {
+            const eventCreatedBy = Number(event.createdBy)
+            const isCreator = eventCreatedBy === numericUserId
+
+            // Parse attendees as both string and number arrays
+            const attendeesAsNumbers = event.attendees?.map(Number) || []
+            const isAttendee = attendeesAsNumbers.includes(numericUserId)
+
+            return isCreator || isAttendee
+          })
         }
 
         // Load meeting requests and convert them to events
@@ -705,6 +715,20 @@ export default function CalendarPage() {
     setNotification({ ...notification, show: false })
   }
 
+  const handleEventCreated = (newEvent: CalendarEvent) => {
+    // Add the new event to the events list
+    setEvents(prevEvents => [...prevEvents, newEvent])
+
+    // Close the create event dialog
+    setShowCreateEvent(false)
+
+    // Show success message
+    toast({
+      title: "Event Created",
+      description: "The event has been added to your calendar",
+    })
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Email Notification */}
@@ -827,7 +851,7 @@ export default function CalendarPage() {
         open={showCreateEvent}
         onOpenChange={setShowCreateEvent}
         selectedDate={selectedDate}
-        onEventCreated={refreshEvents}
+        onEventCreated={handleEventCreated}
       />
 
       {/* View Event Dialog */}

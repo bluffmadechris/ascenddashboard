@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -166,6 +166,21 @@ export default function OwnerPanelPage() {
     }).format(value)
   }
 
+  // Memoize heavy tab content
+  const dashboardTabContent = useMemo(() => (
+    <TabsContent value="dashboard" className="mt-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Owner Dashboard</CardTitle>
+          <CardDescription>Overview of your organization's key metrics and activities.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DashboardStats />
+        </CardContent>
+      </Card>
+    </TabsContent>
+  ), [])
+
   if (isLoading) {
     return <div>Loading...</div>
   }
@@ -178,7 +193,7 @@ export default function OwnerPanelPage() {
         <TabsList className="w-full grid grid-cols-4 lg:grid-cols-8 gap-1">
           <TabsTrigger
             value="dashboard"
-            onClick={() => router.push("/owner-panel?tab=dashboard", { scroll: false })}
+            onClick={() => setActiveTab("dashboard")}
             className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <BarChart className="mr-2 h-4 w-4" />
@@ -187,7 +202,7 @@ export default function OwnerPanelPage() {
           </TabsTrigger>
           <TabsTrigger
             value="roles"
-            onClick={() => router.push("/owner-panel?tab=roles", { scroll: false })}
+            onClick={() => setActiveTab("roles")}
             className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <Shield className="mr-2 h-4 w-4" />
@@ -196,7 +211,7 @@ export default function OwnerPanelPage() {
           </TabsTrigger>
           <TabsTrigger
             value="team"
-            onClick={() => router.push("/owner-panel?tab=team", { scroll: false })}
+            onClick={() => setActiveTab("team")}
             className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <Users className="mr-2 h-4 w-4" />
@@ -205,7 +220,7 @@ export default function OwnerPanelPage() {
           </TabsTrigger>
           <TabsTrigger
             value="onboarding"
-            onClick={() => router.push("/owner-panel?tab=onboarding", { scroll: false })}
+            onClick={() => setActiveTab("onboarding")}
             className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <UserPlus className="mr-2 h-4 w-4" />
@@ -214,7 +229,7 @@ export default function OwnerPanelPage() {
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
-            onClick={() => router.push("/owner-panel?tab=notifications", { scroll: false })}
+            onClick={() => setActiveTab("notifications")}
             className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <Bell className="mr-2 h-4 w-4" />
@@ -223,7 +238,7 @@ export default function OwnerPanelPage() {
           </TabsTrigger>
           <TabsTrigger
             value="password-requests"
-            onClick={() => router.push("/owner-panel?tab=password-requests", { scroll: false })}
+            onClick={() => setActiveTab("password-requests")}
             className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <LockKeyhole className="mr-2 h-4 w-4" />
@@ -232,7 +247,7 @@ export default function OwnerPanelPage() {
           </TabsTrigger>
           <TabsTrigger
             value="strikes"
-            onClick={() => router.push("/owner-panel?tab=strikes", { scroll: false })}
+            onClick={() => setActiveTab("strikes")}
             className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
           >
             <AlertTriangle className="mr-2 h-4 w-4" />
@@ -241,17 +256,7 @@ export default function OwnerPanelPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="dashboard" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Owner Dashboard</CardTitle>
-              <CardDescription>Overview of your organization's key metrics and activities.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DashboardStats />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {dashboardTabContent}
 
         <TabsContent value="roles" className="mt-6">
           <Card>
