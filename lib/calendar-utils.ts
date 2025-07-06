@@ -1261,6 +1261,21 @@ export function getAvailabilityStatus(
 // Get events for multiple users
 export async function getEventsForUsers(userIds: string[]): Promise<CalendarEvent[]> {
   try {
+    // If no user IDs provided, return empty array
+    if (!userIds || userIds.length === 0) {
+      return []
+    }
+
+    // Use the API endpoint with user_ids parameter for better performance
+    const response = await apiClient.getCalendarEvents({
+      user_ids: userIds.join(',')
+    })
+    
+    if (response.success && response.data?.events) {
+      return response.data.events.map(event => transformApiEventToCalendarEvent(event)).filter(Boolean)
+    }
+    
+    // Fallback to loading all events and filtering
     const allEvents = await loadCalendarEvents()
     return allEvents.filter((event) => {
       // Include events where any of the specified users is the creator, attendee, or assignee
@@ -1271,6 +1286,7 @@ export async function getEventsForUsers(userIds: string[]): Promise<CalendarEven
       )
     })
   } catch (error) {
+    console.error('Error loading events for users:', error)
     return []
   }
 }

@@ -182,7 +182,7 @@ export function createStrikeNotification(
 }
 
 // Modify addStrike to include notifications
-export async function addStrike(userId: string, reason: string): Promise<boolean> {
+export async function addStrike(userId: string, reason: string, issuedBy?: string): Promise<boolean> {
   try {
     // Load existing strikes
     const strikes = loadData("strikes", []) as Strike[]
@@ -196,7 +196,7 @@ export async function addStrike(userId: string, reason: string): Promise<boolean
       userId,
       reason,
       date: new Date().toISOString(),
-      issuedBy: "system", // This could be updated to include the current user's ID
+      issuedBy: issuedBy || "system",
     }
 
     // Add the new strike to the list

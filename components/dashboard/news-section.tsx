@@ -47,8 +47,8 @@ export function UpcomingEvents() {
       // Load meeting requests for the current user
       if (user) {
         try {
-          const meetingRequestsAsRequester = getMeetingRequestsForUser(user.id, 'requester')
-          const meetingRequestsAsOwner = getMeetingRequestsForUser(user.id, 'owner')
+          const meetingRequestsAsRequester = await getMeetingRequestsForUser(user.id, 'requester')
+          const meetingRequestsAsOwner = await getMeetingRequestsForUser(user.id, 'owner')
           const allMeetingRequests = [...meetingRequestsAsRequester, ...meetingRequestsAsOwner]
 
           allMeetingRequests.forEach((request) => {

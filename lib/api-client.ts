@@ -378,8 +378,33 @@ class ApiClient {
   }
   
   // Calendar methods
-  async getCalendarEvents(): Promise<ApiResponse<{ events: any[] }>> {
-    return this.get<{ events: any[] }>('/calendar/events');
+  async getCalendarEvents(params?: {
+    start_date?: string;
+    end_date?: string;
+    client_id?: string;
+    page?: number;
+    limit?: number;
+    user_ids?: string;
+  }): Promise<ApiResponse<{ events: any[] }>> {
+    let endpoint = '/calendar/events';
+    
+    if (params) {
+      const searchParams = new URLSearchParams();
+      
+      if (params.start_date) searchParams.append('start_date', params.start_date);
+      if (params.end_date) searchParams.append('end_date', params.end_date);
+      if (params.client_id) searchParams.append('client_id', params.client_id);
+      if (params.page) searchParams.append('page', params.page.toString());
+      if (params.limit) searchParams.append('limit', params.limit.toString());
+      if (params.user_ids) searchParams.append('user_ids', params.user_ids);
+      
+      const queryString = searchParams.toString();
+      if (queryString) {
+        endpoint += `?${queryString}`;
+      }
+    }
+    
+    return this.get<{ events: any[] }>(endpoint);
   }
   
   async createCalendarEvent(eventData: {
@@ -433,6 +458,7 @@ class ApiClient {
   async updateMeetingRequest(id: string, updates: {
     status?: 'pending' | 'approved' | 'rejected' | 'scheduled';
     scheduledDate?: string;
+    responseMessage?: string;
   }): Promise<ApiResponse<{ request: any }>> {
     return this.put<{ request: any }>(`/calendar/meeting-requests/${id}`, updates);
   }

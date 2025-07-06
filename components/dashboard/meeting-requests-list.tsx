@@ -29,6 +29,7 @@ import {
   deleteMeetingRequest,
   checkSchedulingConflicts,
 } from "@/lib/meeting-request"
+import { createCalendarEvent } from "@/lib/calendar-utils"
 import { useToast } from "@/components/ui/use-toast"
 import {
   AlertDialog,
@@ -58,6 +59,7 @@ export function MeetingRequestsList() {
   const [conflictDetected, setConflictDetected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentResponseStatus, setCurrentResponseStatus] = useState<MeetingRequestStatus | null>(null)
 
   // Load meeting requests based on activeTab (sent/received)
   useEffect(() => {
@@ -94,6 +96,40 @@ export function MeetingRequestsList() {
   // Check if user can manage requests
   const canManageRequests = user?.role === "owner"
 
+  // Create a calendar event from an approved meeting request
+  const createCalendarEventFromMeetingRequest = async (request: MeetingRequest) => {
+    if (!request.scheduledDate && !request.proposedDate) {
+      console.warn("No date available for calendar event creation")
+      return
+    }
+
+    try {
+      const eventDate = parseISO(request.scheduledDate || request.proposedDate!)
+      const endDate = addHours(eventDate, 1) // Default 1 hour duration
+
+      const eventData = {
+        title: request.subject,
+        description: request.description || `Meeting requested by ${request.requesterName}`,
+        start_time: eventDate.toISOString(),
+        end_time: endDate.toISOString(),
+        attendees: [request.requesterId, request.targetUserId],
+        created_by: user?.id || request.targetUserId,
+        type: "meeting",
+        status: "confirmed",
+      }
+
+      const response = await createCalendarEvent(eventData)
+
+      if (response) {
+        console.log("Calendar event created successfully for meeting request:", request.id)
+      } else {
+        console.error("Failed to create calendar event for meeting request:", request.id)
+      }
+    } catch (error) {
+      console.error("Error creating calendar event from meeting request:", error)
+    }
+  }
+
   // Handle responding to a request
   const handleRespond = (request: MeetingRequest, status: MeetingRequestStatus) => {
     if (!canManageRequests) {
@@ -105,8 +141,9 @@ export function MeetingRequestsList() {
       return
     }
     setSelectedRequest(request)
+    setCurrentResponseStatus(status)
     setResponseMessage("")
-    setScheduledDate(undefined)
+    setScheduledDate(request.proposedDate ? parseISO(request.proposedDate) : undefined)
     setResponseDialogOpen(true)
   }
 
@@ -146,26 +183,41 @@ export function MeetingRequestsList() {
 
   // Submit response
   const submitResponse = async () => {
-    if (!selectedRequest) return
+    if (!selectedRequest || !currentResponseStatus) return
 
     setIsSubmitting(true)
 
     try {
-      const updates: Partial<MeetingRequest> = {
-        status: "approved",
-        responseMessage,
+      const updates: any = {
+        status: currentResponseStatus,
+      }
+
+      // Add response message if provided
+      if (responseMessage.trim()) {
+        updates.responseMessage = responseMessage.trim()
+      }
+
+      // If approving and a date is scheduled, include it
+      if (currentResponseStatus === "approved" && scheduledDate) {
+        updates.scheduledDate = scheduledDate.toISOString()
       }
 
       const updatedRequest = await updateMeetingRequest(selectedRequest.id, updates)
 
       if (updatedRequest) {
+        // If approved, create a calendar event
+        if (currentResponseStatus === "approved") {
+          await createCalendarEventFromMeetingRequest(updatedRequest)
+        }
+
         // Update local state
         setRequests((prev) => prev.map((r) => (r.id === updatedRequest.id ? updatedRequest : r)))
 
         // Show success message
+        const actionText = currentResponseStatus === "approved" ? "approved" : "rejected"
         toast({
           title: "Response Sent",
-          description: `You have ${updates.status} the meeting request from ${selectedRequest.requesterName}`,
+          description: `You have ${actionText} the meeting request from ${selectedRequest.requesterName}${currentResponseStatus === "approved" ? " and added it to the calendar" : ""}`,
         })
 
         // Close dialog
@@ -438,20 +490,81 @@ export function MeetingRequestsList() {
         <Dialog open={responseDialogOpen} onOpenChange={setResponseDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Respond to Meeting Request</DialogTitle>
+              <DialogTitle>
+                {currentResponseStatus === "approved" ? "Approve Meeting Request" : "Reject Meeting Request"}
+              </DialogTitle>
               <DialogDescription>
-                {selectedRequest?.status === "approved"
-                  ? "Approve this meeting request and send a response to the requester."
+                {currentResponseStatus === "approved"
+                  ? "Approve this meeting request and optionally schedule a specific date and time."
                   : "Reject this meeting request and provide a reason to the requester."}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
+              {currentResponseStatus === "approved" && (
+                <div>
+                  <Label>Scheduled Date & Time</Label>
+                  <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={`w-full justify-start text-left font-normal ${!scheduledDate ? "text-muted-foreground" : ""
+                          }`}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {scheduledDate ? format(scheduledDate, "PPP 'at' p") : "Select date and time"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={scheduledDate}
+                        onSelect={(date) => {
+                          if (date) {
+                            // If a time was already set, preserve it; otherwise set to 2 PM
+                            const newDate = new Date(date)
+                            if (scheduledDate) {
+                              newDate.setHours(scheduledDate.getHours(), scheduledDate.getMinutes())
+                            } else {
+                              newDate.setHours(14, 0) // 2:00 PM default
+                            }
+                            setScheduledDate(newDate)
+                          }
+                          setCalendarOpen(false)
+                        }}
+                        disabled={(date) => isBefore(date, new Date())}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  {scheduledDate && (
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Input
+                        type="time"
+                        value={format(scheduledDate, "HH:mm")}
+                        onChange={(e) => {
+                          const [hours, minutes] = e.target.value.split(":").map(Number)
+                          const newDate = new Date(scheduledDate)
+                          newDate.setHours(hours, minutes)
+                          setScheduledDate(newDate)
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
-                <Label>Response Message (Optional)</Label>
+                <Label>
+                  {currentResponseStatus === "approved" ? "Message (Optional)" : "Reason for Rejection"}
+                </Label>
                 <Textarea
                   value={responseMessage}
                   onChange={(e) => setResponseMessage(e.target.value)}
-                  placeholder="Enter your response..."
+                  placeholder={
+                    currentResponseStatus === "approved"
+                      ? "Add a message for the requester..."
+                      : "Please provide a reason for rejecting this meeting request..."
+                  }
+                  required={currentResponseStatus === "rejected"}
                 />
               </div>
             </div>
@@ -459,8 +572,12 @@ export function MeetingRequestsList() {
               <Button variant="outline" onClick={() => setResponseDialogOpen(false)} disabled={isSubmitting}>
                 Cancel
               </Button>
-              <Button onClick={submitResponse} disabled={isSubmitting}>
-                {isSubmitting ? "Sending..." : "Send Response"}
+              <Button
+                onClick={submitResponse}
+                disabled={isSubmitting || (currentResponseStatus === "rejected" && !responseMessage.trim())}
+                variant={currentResponseStatus === "approved" ? "default" : "destructive"}
+              >
+                {isSubmitting ? "Processing..." : currentResponseStatus === "approved" ? "Approve & Schedule" : "Reject Request"}
               </Button>
             </DialogFooter>
           </DialogContent>

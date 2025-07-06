@@ -1,14 +1,18 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Camera, Loader2 } from "lucide-react"
+import { Camera, Loader2, Upload, Link, X } from "lucide-react"
 import { getInitials } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
 import { apiClient } from "@/lib/api-client"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export function AvatarUpload({
   currentAvatar,
@@ -21,21 +25,84 @@ export function AvatarUpload({
 }) {
   const [isHovering, setIsHovering] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [urlInput, setUrlInput] = useState("")
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const { user } = useAuth()
   const { toast } = useToast()
 
-  const handleChangeAvatarUrl = async () => {
-    if (!user) return
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !user) return
 
-    const url = window.prompt(
-      "Enter the URL of your profile picture:\n\nRecommended services:\n" +
-      "1. https://picsum.photos/400/400 (random beautiful photo)\n" +
-      "2. https://placehold.co/400x400.png (simple placeholder)\n" +
-      "3. https://via.placeholder.com/400.jpg (another placeholder)\n\n" +
-      "Note: Stock photo services (like iStock, Shutterstock) don't allow direct image links. " +
-      "Please download the image first and upload it to your own hosting, or use one of the services above."
-    )?.trim()
-    if (!url) return
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid File",
+        description: "Please select an image file (JPG, PNG, GIF, etc.)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please select an image smaller than 5MB",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsUploading(true)
+
+    try {
+      // Create FormData for file upload
+      const formData = new FormData()
+      formData.append('avatar', file)
+
+      // Upload to the backend
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/users/${user.id}/avatar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to upload avatar')
+      }
+
+      onAvatarChange(result.data.avatar_url || result.data.signed_url)
+      setIsDialogOpen(false)
+      toast({
+        title: 'Success',
+        description: 'Profile picture updated successfully.'
+      })
+    } catch (error) {
+      console.error('Avatar upload error:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to upload profile picture',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsUploading(false)
+      // Clear the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleUrlUpload = async () => {
+    if (!user || !urlInput.trim()) return
+
+    const url = urlInput.trim()
 
     // Basic validation with special cases for known image services
     const knownImageServices = [
@@ -70,7 +137,7 @@ export function AvatarUpload({
     if (blockedDomains.some(domain => url.includes(domain))) {
       toast({
         title: "Stock Photo Detected",
-        description: "Stock photo services don't allow direct image links. Please download the image first and upload it to your own hosting, or use one of the suggested placeholder services.",
+        description: "Stock photo services don't allow direct image links. Please download the image first and upload it, or use one of the suggested placeholder services.",
         variant: "destructive",
       })
       return
@@ -116,6 +183,8 @@ export function AvatarUpload({
       }
 
       onAvatarChange(url)
+      setIsDialogOpen(false)
+      setUrlInput("")
       toast({
         title: 'Success',
         description: 'Profile picture updated successfully.'
@@ -132,6 +201,43 @@ export function AvatarUpload({
     }
   }
 
+  const handleRemoveAvatar = async () => {
+    if (!user) return
+
+    setIsUploading(true)
+
+    try {
+      const response = await apiClient.updateUser(user.id, {
+        name: user.name,
+        avatar: "",
+        phone: user.phone,
+        title: user.title,
+        department: user.department,
+        role: user.role
+      })
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to remove profile picture')
+      }
+
+      onAvatarChange("")
+      setIsDialogOpen(false)
+      toast({
+        title: 'Success',
+        description: 'Profile picture removed successfully.'
+      })
+    } catch (error) {
+      console.error('Avatar removal error:', error)
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to remove profile picture',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
   return (
     <div className="relative" onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => setIsHovering(false)}>
       <Avatar className="h-24 w-24">
@@ -139,19 +245,109 @@ export function AvatarUpload({
         <AvatarFallback className="text-lg">{getInitials(name)}</AvatarFallback>
       </Avatar>
 
-      <button
-        type="button"
-        onClick={handleChangeAvatarUrl}
-        className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white transition-opacity ${isHovering || isUploading ? 'opacity-100' : 'opacity-0'}`}
-        disabled={isUploading}
-      >
-        {isUploading ? (
-          <Loader2 className="h-6 w-6 animate-spin" />
-        ) : (
-          <Camera className="h-6 w-6" />
-        )}
-        <span className="sr-only">Change profile picture URL</span>
-      </button>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white transition-opacity ${isHovering || isUploading ? 'opacity-100' : 'opacity-0'}`}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <Loader2 className="h-6 w-6 animate-spin" />
+            ) : (
+              <Camera className="h-6 w-6" />
+            )}
+            <span className="sr-only">Change profile picture</span>
+          </button>
+        </DialogTrigger>
+
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Profile Picture</DialogTitle>
+          </DialogHeader>
+
+          <Tabs defaultValue="upload" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="upload">Upload File</TabsTrigger>
+              <TabsTrigger value="url">Use URL</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="upload" className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="file-upload">Choose an image file</Label>
+                <Input
+                  id="file-upload"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Supports JPG, PNG, GIF up to 5MB
+                </p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="url" className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="url-input">Image URL</Label>
+                <Input
+                  id="url-input"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  disabled={isUploading}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Try: picsum.photos/400/400 or placehold.co/400x400.png
+                </p>
+              </div>
+
+              <Button
+                onClick={handleUrlUpload}
+                disabled={isUploading || !urlInput.trim()}
+                className="w-full"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Link className="mr-2 h-4 w-4" />
+                    Use This URL
+                  </>
+                )}
+              </Button>
+            </TabsContent>
+          </Tabs>
+
+          {currentAvatar && (
+            <div className="border-t pt-4">
+              <Button
+                onClick={handleRemoveAvatar}
+                disabled={isUploading}
+                variant="outline"
+                className="w-full"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Removing...
+                  </>
+                ) : (
+                  <>
+                    <X className="mr-2 h-4 w-4" />
+                    Remove Current Picture
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

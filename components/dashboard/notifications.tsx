@@ -26,7 +26,6 @@ import { Input } from "@/components/ui/input"
 import { useNotifications } from "@/lib/api-notifications-context"
 import type { Notification } from "@/lib/api-notifications-context"
 import { format } from "date-fns"
-import { api } from "@/lib/api-client"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import {
@@ -37,6 +36,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { testNotificationSound, getAudioDebugInfo } from "@/lib/sound-utils"
 
 function getNotificationIcon(type: Notification["type"]) {
   switch (type) {
@@ -65,7 +65,6 @@ export function NotificationsMenu() {
     markAllAsRead,
     deleteNotification,
     refreshNotifications,
-    setNotifications,
     soundEnabled,
     toggleSound,
   } = useNotifications()
@@ -73,7 +72,6 @@ export function NotificationsMenu() {
   const [searchQuery, setSearchQuery] = useState("")
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -85,48 +83,6 @@ export function NotificationsMenu() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
-
-  useEffect(() => {
-    // Create audio element for notification sound
-    audioRef.current = new Audio("/notification-sound.mp3")
-
-    // Set up WebSocket or polling for real-time notifications
-    const checkNewNotifications = async () => {
-      try {
-        const response = await api.get('/notifications/unread')
-        const newNotifications = response.data
-
-        // If there are new notifications and they're different from current ones
-        if (newNotifications.length > notifications.length) {
-          setNotifications(newNotifications)
-
-          // Play sound for notifications that have sound enabled
-          const soundEnabledNotifications = newNotifications.filter(
-            (n: any) => n.sound_enabled
-          )
-
-          if (soundEnabledNotifications.length > 0 && audioRef.current) {
-            audioRef.current.play().catch(console.error)
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching notifications:', error)
-      }
-    }
-
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(checkNewNotifications, 30000)
-
-    // Initial check
-    checkNewNotifications()
-
-    return () => {
-      clearInterval(interval)
-      if (audioRef.current) {
-        audioRef.current = null
-      }
-    }
-  }, [notifications, setNotifications])
 
   const filteredNotifications = notifications.filter(notification =>
     notification.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -164,24 +120,77 @@ export function NotificationsMenu() {
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-semibold">Notifications</h2>
             <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuLabel>Sound Settings</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => toggleSound(!soundEnabled)}>
+                    {soundEnabled ? (
+                      <>
+                        <VolumeX className="h-4 w-4 mr-2" />
+                        Disable Sound
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="h-4 w-4 mr-2" />
+                        Enable Sound
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={async () => {
+                      console.log('[UI] Test sound button clicked')
+
+                      // Get debug info before test
+                      const debugInfo = getAudioDebugInfo()
+                      console.log('[UI] Audio debug info:', debugInfo)
+
+                      try {
+                        const success = await testNotificationSound()
+                        console.log('[UI] Test sound result:', success)
+
+                        if (success) {
+                          toast("🔊 Sound test successful!", {
+                            description: "Notification sound is working properly"
+                          })
+                        } else {
+                          // Get debug info after failed test
+                          const failedDebugInfo = getAudioDebugInfo()
+                          console.log('[UI] Failed test debug info:', failedDebugInfo)
+
+                          toast("❌ Sound test failed", {
+                            description: "Check browser console for details. Try refreshing the page and testing again."
+                          })
+                        }
+                      } catch (error) {
+                        console.error('[UI] Test sound error:', error)
+                        toast("❌ Sound test error", {
+                          description: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+                        })
+                      }
+                    }}
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Test Sound
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  markAllAsRead()
-                  setIsOpen(false)
-                }}
+                onClick={markAllAsRead}
               >
                 Mark all read
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  // For now, just refresh notifications
-                  refreshNotifications()
-                  setIsOpen(false)
-                }}
+                onClick={refreshNotifications}
               >
                 Refresh
               </Button>
@@ -213,7 +222,7 @@ export function NotificationsMenu() {
                   <div
                     key={notification.id}
                     className={cn(
-                      "group relative rounded-lg border p-4 transition-colors",
+                      "group relative rounded-lg border p-4 transition-colors cursor-pointer",
                       notification.is_read ? "bg-background" : "bg-muted/50"
                     )}
                     onClick={() => handleNotificationClick(notification)}
@@ -225,6 +234,9 @@ export function NotificationsMenu() {
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium">{notification.title}</p>
+                          {!notification.is_read && (
+                            <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">{notification.message}</p>
                         <p className="text-xs text-muted-foreground">
@@ -273,55 +285,11 @@ export function NotificationsMenu() {
 }
 
 export function Notifications() {
-  const { notifications, setNotifications } = useNotifications()
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const { notifications, markAsRead } = useNotifications()
 
-  useEffect(() => {
-    // Create audio element for notification sound
-    audioRef.current = new Audio("/notification-sound.mp3")
-
-    // Set up WebSocket or polling for real-time notifications
-    const checkNewNotifications = async () => {
-      try {
-        const response = await api.get('/notifications/unread')
-        const newNotifications = response.data
-
-        // If there are new notifications and they're different from current ones
-        if (newNotifications.length > notifications.length) {
-          setNotifications(newNotifications)
-
-          // Play sound for notifications that have sound enabled
-          const soundEnabledNotifications = newNotifications.filter(
-            (n: any) => n.sound_enabled
-          )
-
-          if (soundEnabledNotifications.length > 0 && audioRef.current) {
-            audioRef.current.play().catch(console.error)
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching notifications:', error)
-      }
-    }
-
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(checkNewNotifications, 30000)
-
-    // Initial check
-    checkNewNotifications()
-
-    return () => {
-      clearInterval(interval)
-      if (audioRef.current) {
-        audioRef.current = null
-      }
-    }
-  }, [notifications, setNotifications])
-
-  const markAsRead = async (notificationId: string) => {
+  const handleMarkAsRead = async (notificationId: number) => {
     try {
-      await api.put(`/notifications/${notificationId}/read`)
-      setNotifications(notifications.filter(n => n.id !== notificationId))
+      await markAsRead(notificationId)
     } catch (error) {
       toast.error("Failed to mark notification as read")
     }
@@ -334,27 +302,42 @@ export function Notifications() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {notifications.map((notification: any) => (
+          {notifications.map((notification: Notification) => (
             <div
               key={notification.id}
-              className="flex items-center justify-between p-4 border rounded-lg"
+              className={cn(
+                "flex items-center justify-between p-4 border rounded-lg",
+                !notification.is_read && "bg-muted/50"
+              )}
             >
-              <div>
-                <p>{notification.content}</p>
-                <p className="text-sm text-gray-500">
-                  {new Date(notification.created_at).toLocaleString()}
-                </p>
+              <div className="flex items-start gap-3">
+                <div className="rounded-full p-2 bg-primary/10">
+                  {getNotificationIcon(notification.type)}
+                </div>
+                <div>
+                  <p className="font-medium">{notification.title}</p>
+                  <p className="text-sm text-muted-foreground">{notification.message}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(notification.created_at), "MMM d, yyyy 'at' h:mm a")}
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={() => markAsRead(notification.id)}
-                className="text-sm text-blue-500 hover:text-blue-700"
-              >
-                Mark as Read
-              </button>
+              {!notification.is_read && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleMarkAsRead(notification.id)}
+                >
+                  Mark as Read
+                </Button>
+              )}
             </div>
           ))}
           {notifications.length === 0 && (
-            <p className="text-center text-gray-500">No new notifications</p>
+            <div className="text-center py-8">
+              <Bell className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+              <p className="text-muted-foreground">No new notifications</p>
+            </div>
           )}
         </div>
       </CardContent>

@@ -1,8 +1,9 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from "@/lib/auth-context"
+import { playNotificationSound, isSoundEnabled, toggleNotificationSound } from "@/lib/sound-utils"
 
 export interface Notification {
     id: number
@@ -12,6 +13,7 @@ export interface Notification {
     type: "info" | "warning" | "success" | "error" | "security" | "system"
     is_read: boolean
     created_at: string
+    sound_enabled?: boolean
 }
 
 interface NotificationsContextType {
@@ -22,6 +24,9 @@ interface NotificationsContextType {
     markAsRead: (id: number) => Promise<void>
     markAllAsRead: () => Promise<void>
     deleteNotification: (id: number) => Promise<void>
+    setNotifications: (notifications: Notification[]) => void
+    soundEnabled: boolean
+    toggleSound: (enabled: boolean) => void
 }
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined)
@@ -29,10 +34,24 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 export function NotificationsProvider({ children }: { children: ReactNode }) {
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [isLoading, setIsLoading] = useState(false)
+    const [soundEnabled, setSoundEnabled] = useState(true)
     const { user, isApiConnected } = useAuth()
+    const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+    const lastNotificationCount = useRef(0)
 
     // Calculate unread count
     const unreadCount = notifications.filter(n => !n.is_read).length
+
+    // Initialize sound preference
+    useEffect(() => {
+        setSoundEnabled(isSoundEnabled())
+    }, [])
+
+    // Toggle sound preference
+    const toggleSound = (enabled: boolean) => {
+        setSoundEnabled(enabled)
+        toggleNotificationSound(enabled)
+    }
 
     // Load notifications from API
     const refreshNotifications = async () => {
@@ -44,7 +63,23 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         try {
             const response = await apiClient.getNotifications()
             if (response.success && response.data?.notifications) {
-                setNotifications(response.data.notifications)
+                const newNotifications = response.data.notifications
+
+                // Check if we have new notifications
+                const hasNewNotifications = newNotifications.length > lastNotificationCount.current
+
+                if (hasNewNotifications && soundEnabled) {
+                    // Play sound for new notifications
+                    const newUnreadNotifications = newNotifications.filter((n: Notification) => !n.is_read)
+                    const previousUnreadCount = notifications.filter(n => !n.is_read).length
+
+                    if (newUnreadNotifications.length > previousUnreadCount) {
+                        playNotificationSound()
+                    }
+                }
+
+                setNotifications(newNotifications)
+                lastNotificationCount.current = newNotifications.length
             }
         } catch (error) {
             console.error('Failed to load notifications:', error)
@@ -53,13 +88,29 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         }
     }
 
-    // Load notifications on mount and when user changes
+    // Set up automatic polling for new notifications
     useEffect(() => {
         if (isApiConnected && user) {
+            // Initial load
             refreshNotifications()
+
+            // Set up polling every 10 seconds for better responsiveness
+            pollingIntervalRef.current = setInterval(refreshNotifications, 10000)
         } else {
             // Clear notifications if not connected or no user
             setNotifications([])
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+            }
+        }
+
+        // Cleanup on unmount
+        return () => {
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current)
+                pollingIntervalRef.current = null
+            }
         }
     }, [isApiConnected, user])
 
@@ -113,6 +164,9 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
                 markAsRead,
                 markAllAsRead,
                 deleteNotification,
+                setNotifications,
+                soundEnabled,
+                toggleSound,
             }}
         >
             {children}

@@ -14,6 +14,7 @@ export interface MeetingRequest {
   status: 'pending' | 'approved' | 'rejected' | 'scheduled'
   proposedDate?: string
   scheduledDate?: string
+  responseMessage?: string
   createdAt: string
   updatedAt: string
 }
@@ -51,9 +52,9 @@ export async function getMeetingRequestsForUser(userId: string | number, type: '
 
 function transformApiRequestToMeetingRequest(apiRequest: any): MeetingRequest {
   return {
-    id: Number(apiRequest.id),
-    requesterId: Number(apiRequest.requester_id),
-    targetUserId: Number(apiRequest.target_user_id),
+    id: String(apiRequest.id),
+    requesterId: String(apiRequest.requester_id),
+    targetUserId: String(apiRequest.target_user_id),
     requesterName: apiRequest.requester_name,
     targetUserName: apiRequest.target_user_name,
     subject: apiRequest.subject || '',
@@ -61,6 +62,7 @@ function transformApiRequestToMeetingRequest(apiRequest: any): MeetingRequest {
     status: apiRequest.status || 'pending',
     proposedDate: apiRequest.proposed_date,
     scheduledDate: apiRequest.scheduled_date,
+    responseMessage: apiRequest.response_message,
     createdAt: apiRequest.created_at || new Date().toISOString(),
     updatedAt: apiRequest.updated_at || new Date().toISOString(),
   }
@@ -112,6 +114,7 @@ export async function updateMeetingRequest(
   updates: {
     status?: 'pending' | 'approved' | 'rejected' | 'scheduled'
     scheduledDate?: string
+    responseMessage?: string
   }
 ): Promise<MeetingRequest | null> {
   try {
