@@ -144,9 +144,8 @@ export default function CalendarPage() {
         let allEvents: CalendarEvent[] = []
 
         if (selectedEmployees.length > 0) {
-          // Load events for selected employees + current user
-          const userIds = [...selectedEmployees, user.id]
-          allEvents = await getEventsForUsers(userIds)
+          // Load events for ONLY selected employees (not current user)
+          allEvents = await getEventsForUsers(selectedEmployees)
 
           // Apply user colors to events
           allEvents = allEvents.map(event => ({
@@ -174,10 +173,15 @@ export default function CalendarPage() {
         }
 
         // Load meeting requests and convert them to events
-        const meetingRequestsAsRequester = await getMeetingRequestsForUser(user.id, 'requester')
-        const meetingRequestsAsOwner = await getMeetingRequestsForUser(user.id, 'owner')
-        const allMeetingRequests = [...meetingRequestsAsRequester, ...meetingRequestsAsOwner]
-        const meetingRequestEvents = convertMeetingRequestsToEvents(allMeetingRequests)
+        let meetingRequestEvents: CalendarEvent[] = []
+        if (selectedEmployees.length === 0) {
+          // Only load current user's meeting requests if no employees are selected
+          const meetingRequestsAsRequester = await getMeetingRequestsForUser(user.id, 'requester')
+          const meetingRequestsAsOwner = await getMeetingRequestsForUser(user.id, 'owner')
+          const allMeetingRequests = [...meetingRequestsAsRequester, ...meetingRequestsAsOwner]
+          meetingRequestEvents = convertMeetingRequestsToEvents(allMeetingRequests)
+        }
+        // If employees are selected, don't show current user's meeting requests
 
         // Combine regular events with meeting request events
         const combinedEvents = [...allEvents, ...meetingRequestEvents]
@@ -541,13 +545,15 @@ export default function CalendarPage() {
   // Get team availability for selected date
   const getSelectedDateTeamAvailability = () => {
     if (selectedEmployees.length === 0) return {}
-    return getTeamAvailability([...selectedEmployees, user.id], selectedDate)
+    // Only show availability for selected employees, not current user
+    return getTeamAvailability(selectedEmployees, selectedDate)
   }
 
   // Find common available slots for team
   const getCommonAvailableSlots = () => {
     if (selectedEmployees.length === 0) return []
-    return findCommonAvailableSlots([...selectedEmployees, user.id], selectedDate, 60)
+    // Only find common slots for selected employees, not current user
+    return findCommonAvailableSlots(selectedEmployees, selectedDate, 60)
   }
 
   // Delete event
@@ -744,7 +750,7 @@ export default function CalendarPage() {
           <h1 className="text-3xl font-bold">Calendar</h1>
           {selectedEmployees.length > 0 && (
             <p className="text-sm text-muted-foreground mt-1">
-              Viewing {selectedEmployees.length} team member{selectedEmployees.length > 1 ? 's' : ''} + your calendar
+              Viewing {selectedEmployees.length > 1 ? `${selectedEmployees.length} team members'` : '1 team member\'s'} calendar only
             </p>
           )}
         </div>

@@ -93,8 +93,25 @@ export function MeetingRequestsList() {
     {} as Record<MeetingRequestStatus, number>,
   )
 
-  // Check if user can manage requests
+  // Check if user can manage requests - only the recipient (target user) can approve/reject, not the sender
   const canManageRequests = user?.role === "owner"
+
+  // Function to check if user can manage a specific request (not the sender)
+  const canManageSpecificRequest = (request: MeetingRequest) => {
+    if (!user) return false
+
+    // If viewing received requests, user should be the target (recipient) not the requester (sender)
+    if (activeTab === "received") {
+      return user.id.toString() === request.targetUserId && user.id.toString() !== request.requesterId
+    }
+
+    // If viewing sent requests, user cannot manage them (they're the sender)
+    if (activeTab === "sent") {
+      return false
+    }
+
+    return false
+  }
 
   // Create a calendar event from an approved meeting request
   const createCalendarEventFromMeetingRequest = async (request: MeetingRequest) => {
@@ -132,10 +149,10 @@ export function MeetingRequestsList() {
 
   // Handle responding to a request
   const handleRespond = (request: MeetingRequest, status: MeetingRequestStatus) => {
-    if (!canManageRequests) {
+    if (!canManageSpecificRequest(request)) {
       toast({
         title: "Permission Denied",
-        description: "Only owners can manage meeting requests.",
+        description: "You can only approve/reject meeting requests that were sent to you, not ones you sent.",
         variant: "destructive",
       })
       return
@@ -149,10 +166,10 @@ export function MeetingRequestsList() {
 
   // Handle deleting a request
   const handleDelete = (request: MeetingRequest) => {
-    if (!canManageRequests) {
+    if (!canManageSpecificRequest(request)) {
       toast({
         title: "Permission Denied",
-        description: "Only owners can delete meeting requests.",
+        description: "You can only delete meeting requests that were sent to you, not ones you sent.",
         variant: "destructive",
       })
       return
@@ -446,7 +463,7 @@ export function MeetingRequestsList() {
                       </div>
                     )}
                   </CardContent>
-                  {canManageRequests && (
+                  {canManageSpecificRequest(request) && (
                     <CardFooter className="flex justify-end space-x-2">
                       {request.status === "pending" && (
                         <>

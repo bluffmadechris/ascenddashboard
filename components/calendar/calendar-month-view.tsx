@@ -21,21 +21,30 @@ import { Badge } from "../ui/badge"
 import { Clock, MapPin, Users } from "lucide-react"
 
 interface CalendarMonthViewProps {
-  currentDate: Date
+  currentDate?: Date
+  selectedDate?: Date
   events: CalendarEvent[]
-  onEventClick: (event: CalendarEvent) => void
-  onDateClick: (date: Date) => void
-  onCreateEventAtTime: (date: Date) => void
+  availability?: any[]
+  onEventClick?: (event: CalendarEvent) => void
+  onDateClick?: (date: Date) => void
+  onDateSelect?: (date: Date) => void
+  onDateRightClick?: (date: Date) => void
+  onCreateEventAtTime?: (date: Date) => void
 }
 
 export function CalendarMonthView({
   currentDate,
+  selectedDate,
   events = [],
+  availability = [],
   onEventClick,
   onDateClick,
+  onDateSelect,
+  onDateRightClick,
   onCreateEventAtTime,
 }: CalendarMonthViewProps) {
-  const monthStart = startOfMonth(currentDate)
+  const baseDate = currentDate || selectedDate || new Date()
+  const monthStart = startOfMonth(baseDate)
   const monthEnd = endOfMonth(monthStart)
   const startDate = startOfWeek(monthStart)
   const endDate = addDays(startOfWeek(endOfMonth(monthEnd)), 6)
@@ -46,6 +55,19 @@ export function CalendarMonthView({
       try {
         const eventDate = parseISO(event.start)
         return isValid(eventDate) && isSameDay(eventDate, date)
+      } catch (error) {
+        return false
+      }
+    })
+  }
+
+  // Get availability for a specific date
+  const getAvailabilityForDate = (date: Date) => {
+    const dateStr = format(date, "yyyy-MM-dd")
+    return availability.find(a => {
+      try {
+        const availDate = parseISO(a.date)
+        return isValid(availDate) && format(availDate, "yyyy-MM-dd") === dateStr
       } catch (error) {
         return false
       }
@@ -91,17 +113,30 @@ export function CalendarMonthView({
         const isCurrentDay = isToday(day)
         const dayEvents = getEventsForDate(day)
         const hasEvents = dayEvents.length > 0
+        const dayAvailability = getAvailabilityForDate(day)
+        const hasAvailability = dayAvailability !== undefined
 
         week.push(
           <div
             key={day.toString()}
             className={cn(
-              "min-h-[100px] sm:min-h-[120px] p-1 sm:p-2 border-r border-b cursor-pointer hover:bg-muted/50 transition-colors min-w-0 overflow-hidden",
+              "min-h-[100px] sm:min-h-[120px] p-1 sm:p-2 border-r border-b cursor-pointer hover:bg-muted/50 transition-colors min-w-0 overflow-hidden relative",
               !isCurrentMonth && "bg-muted/20 text-muted-foreground",
               isCurrentDay && "bg-primary/10",
+              hasAvailability && dayAvailability.isAvailable && "bg-green-50 border-green-200",
+              hasAvailability && !dayAvailability.isAvailable && "bg-red-50 border-red-200",
             )}
-            onClick={() => onDateClick(currentDay)}
-            onDoubleClick={() => onCreateEventAtTime(currentDay)}
+            onClick={() => {
+              if (onDateClick) onDateClick(currentDay)
+              if (onDateSelect) onDateSelect(currentDay)
+            }}
+            onContextMenu={(e) => {
+              if (onDateRightClick) {
+                e.preventDefault()
+                onDateRightClick(currentDay)
+              }
+            }}
+            onDoubleClick={() => onCreateEventAtTime && onCreateEventAtTime(currentDay)}
           >
             {/* Date number */}
             <div className="flex items-center justify-between mb-2">
@@ -113,11 +148,22 @@ export function CalendarMonthView({
               >
                 {format(day, "d")}
               </span>
-              {hasEvents && (
-                <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
-                  {dayEvents.length}
-                </Badge>
-              )}
+              <div className="flex items-center gap-1">
+                {hasAvailability && (
+                  <div 
+                    className={cn(
+                      "w-2 h-2 rounded-full",
+                      dayAvailability.isAvailable ? "bg-green-500" : "bg-red-500"
+                    )}
+                    title={dayAvailability.isAvailable ? "Available" : "Unavailable"}
+                  />
+                )}
+                {hasEvents && (
+                  <Badge variant="secondary" className="text-xs px-1.5 py-0.5">
+                    {dayEvents.length}
+                  </Badge>
+                )}
+              </div>
             </div>
 
             {/* Events */}

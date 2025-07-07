@@ -10,10 +10,11 @@ export interface Notification {
     user_id: number
     title: string
     message: string
-    type: "info" | "warning" | "success" | "error" | "security" | "system"
+    type: "info" | "warning" | "success" | "error" | "security" | "system" | "meeting_request" | "meeting_request_update" | "meeting_request_deleted"
     is_read: boolean
     created_at: string
     sound_enabled?: boolean
+    data?: any
 }
 
 interface NotificationsContextType {
@@ -74,7 +75,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
                     const previousUnreadCount = notifications.filter(n => !n.is_read).length
 
                     if (newUnreadNotifications.length > previousUnreadCount) {
-                        playNotificationSound()
+                        // Check if any of the new notifications are important types that should play sound
+                        const importantTypes = ['meeting_request', 'meeting_request_update', 'security', 'system', 'error']
+                        const hasImportantNotifications = newUnreadNotifications.some(n => importantTypes.includes(n.type))
+
+                        if (hasImportantNotifications) {
+                            playNotificationSound()
+                        }
                     }
                 }
 

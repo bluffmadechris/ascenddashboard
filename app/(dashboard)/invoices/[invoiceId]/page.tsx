@@ -199,10 +199,18 @@ export default function InvoiceDetailsPage() {
         return
       }
 
-      setInvoice(response.data)
+      // Update the local invoice state with the new status
+      // If the API returns updated invoice data, use it; otherwise just update the status locally
+      if (response.data && typeof response.data === 'object') {
+        setInvoice(response.data)
+      } else {
+        // Fallback: update just the status locally
+        setInvoice(prev => ({ ...prev, status: newStatus }))
+      }
+
       toast({
         title: "Status Updated",
-        description: `Invoice status has been updated to ${newStatus} and notifications sent.`,
+        description: `Invoice status has been updated to ${newStatus}.`,
       })
     } catch (err: any) {
       console.error("Error updating invoice status:", err)
