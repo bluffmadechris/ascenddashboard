@@ -72,16 +72,30 @@ export default function ProfilePage() {
   }, [user])
 
   const handleSavePersonalInfo = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "No user found. Please try logging in again.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
     try {
       // Update user profile
       const fullName = `${firstName} ${lastName}`.trim()
-      const success = await updateProfile(user?.id || "", {
+      const success = await updateProfile(String(user.id), {
         name: fullName,
         bio: bio,
         avatar: avatar,
         socialMedia: socialLinks,
+        email: email,
+        role: user.role,
+        phone: user.phone,
+        title: user.title,
+        department: user.department
       })
 
       if (success) {
@@ -99,6 +113,7 @@ export default function ProfilePage() {
         })
       }
     } catch (error) {
+      console.error('Profile update error:', error)
       toast({
         title: "Error",
         description: "An error occurred while updating your profile.",
@@ -110,6 +125,15 @@ export default function ProfilePage() {
   }
 
   const handleSavePassword = async () => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "No user found. Please try logging in again.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setIsLoading(true)
 
     // Validate passwords
@@ -145,7 +169,7 @@ export default function ProfilePage() {
 
     try {
       // Call the changePassword method from auth context
-      const success = await changePassword(user?.id || "", password, newPassword)
+      const success = await changePassword(String(user.id), password, newPassword)
 
       if (success) {
         setEditingSection(null)
@@ -164,6 +188,7 @@ export default function ProfilePage() {
         })
       }
     } catch (error) {
+      console.error('Password update error:', error)
       toast({
         title: "Error",
         description: "An error occurred while updating your password.",
@@ -175,16 +200,28 @@ export default function ProfilePage() {
   }
 
   const handleAvatarChange = async (newAvatar: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "No user found. Please try logging in again.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setAvatar(newAvatar)
-      if (!isEditing && user) {
-        const success = await updateProfile(user.id.toString(), {
+      if (!isEditing) {
+        const success = await updateProfile(String(user.id), {
           name: user.name,
           avatar: newAvatar,
           phone: user.phone,
           title: user.title,
           department: user.department,
-          role: user.role
+          role: user.role,
+          bio: user.bio,
+          email: user.email,
+          socialMedia: user.socialMedia
         })
 
         if (success) {
@@ -195,6 +232,7 @@ export default function ProfilePage() {
         }
       }
     } catch (error) {
+      console.error('Avatar update error:', error)
       toast({
         title: "Error",
         description: "Failed to update profile picture.",
@@ -207,7 +245,7 @@ export default function ProfilePage() {
     try {
       setSocialLinks(newLinks)
       if (!isEditing) {
-        const success = await updateProfile(user?.id || "", {
+        const success = await updateProfile(String(user?.id || ""), {
           socialMedia: newLinks,
         })
 
@@ -256,7 +294,7 @@ export default function ProfilePage() {
     try {
       // Update user profile
       const fullName = `${firstName} ${lastName}`.trim()
-      const success = await updateProfile(user?.id || "", {
+      const success = await updateProfile(String(user?.id || ""), {
         name: fullName,
         bio: bio,
         avatar: avatar,

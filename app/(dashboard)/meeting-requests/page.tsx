@@ -78,7 +78,7 @@ export default function MeetingRequestsPage() {
 
     try {
       const response = await api.createMeetingRequest({
-        target_user_id: Number(targetId),
+        target_user_id: targetId,
         proposed_date: selectedDateTime.toISOString(),
         subject: subject.trim(),
         description: description.trim()
@@ -142,9 +142,13 @@ export default function MeetingRequestsPage() {
                         <SelectValue placeholder="Select a user" />
                       </SelectTrigger>
                       <SelectContent>
-                        {users.filter(u => u.id !== user.id).map(u => (
-                          <SelectItem key={u.id} value={String(u.id)}>{u.name} ({u.role})</SelectItem>
-                        ))}
+                        {users
+                          .filter(u => u.id !== user?.id && (isOwner ? u.role !== "owner" : u.role === "owner"))
+                          .map(u => (
+                            <SelectItem key={u.id} value={String(u.id)}>
+                              {u.name} ({u.role})
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>

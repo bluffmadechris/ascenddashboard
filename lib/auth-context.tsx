@@ -13,6 +13,7 @@ export type User = ApiUser & {
   clientAccess?: ClientAccess[]
   socialMedia?: SocialMediaLinks
   password?: string // For backward compatibility with existing code
+  bio?: string
 }
 
 export type UserRole = string
@@ -323,8 +324,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         u.email.toLowerCase() === email.toLowerCase() && u.password === password
       )
 
-
-
       if (matchedUser) {
         const { password: _, ...userWithoutPassword } = matchedUser
         setUser(userWithoutPassword)
@@ -453,47 +452,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Update profile function
   const updateProfile = async (userId: string, updates: Partial<User>): Promise<boolean> => {
-    if (isApiConnected) {
-      try {
-        const response = await apiClient.updateUser(parseInt(userId), updates)
+    try {
+      if (!userId) {
+        console.error('No user ID provided for profile update')
+        return false
+      }
+
+      // Convert userId to number for API
+      const numericUserId = Number(userId)
+      if (isNaN(numericUserId)) {
+        console.error('Invalid user ID format')
+        return false
+      }
+
+      if (isApiConnected) {
+        const response = await apiClient.updateUser(numericUserId, updates)
         if (response.success && response.data?.user) {
-          // Update local user state if this is the current user
-          if (user && user.id.toString() === userId) {
-            setUser(response.data.user)
+          // Update local user state if the current user is being updated
+          if (user && user.id === numericUserId) {
+            setUser({ ...user, ...response.data.user })
           }
-          // Refresh users list
-          await refreshUsers()
+          // Update users list
+          setUsers(prevUsers =>
+            prevUsers.map(u => (u.id === numericUserId ? { ...u, ...response.data?.user } : u))
+          )
           return true
         }
         return false
-      } catch (error) {
-        console.error('API profile update failed:', error)
-        return false
-      }
-    } else {
-      // Fall back to localStorage
-      const userIndex = users.findIndex((u) => u.id.toString() === userId)
+      } else {
+        // Offline mode: Update local storage
+        const updatedUser = { ...user, ...updates }
+        setUser(updatedUser as unknown as User)
+        saveData('user', updatedUser)
 
-      if (userIndex !== -1) {
-        const updatedUsers = [...users]
-        updatedUsers[userIndex] = {
-          ...updatedUsers[userIndex],
-          ...updates,
-        }
+        // Update in users array
+        const updatedUsers = users.map(u =>
+          u.id === numericUserId ? { ...u, ...updates } : u
+        )
         setUsers(updatedUsers)
-        saveData("users", updatedUsers)
-
-        if (user && user.id.toString() === userId) {
-          const updatedUser = {
-            ...user,
-            ...updates,
-          }
-          setUser(updatedUser)
-          saveData("user", updatedUser)
-        }
-
+        saveData('users', updatedUsers)
         return true
       }
+    } catch (error) {
+      console.error('Profile update error:', error)
       return false
     }
   }
