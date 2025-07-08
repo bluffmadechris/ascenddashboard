@@ -25,8 +25,10 @@ export function AvailabilityView() {
     if (user?.role === 'owner') {
       const fetchTeamMembers = async () => {
         try {
-          const response = await api.get('/users/team-members')
-          setTeamMembers(response.data)
+          const response = await api.getTeamMembers()
+          if (response.success && response.data) {
+            setTeamMembers(response.data)
+          }
         } catch (error) {
           toast.error("Failed to fetch team members")
         }
@@ -39,8 +41,10 @@ export function AvailabilityView() {
   useEffect(() => {
     const fetchAvailability = async () => {
       try {
-        const response = await api.get(`/users/${selectedUserId}/availability`)
-        setAvailability(response.data)
+        const response = await api.getUserAvailability(selectedUserId)
+        if (response.success && response.data) {
+          setAvailability(response.data)
+        }
       } catch (error) {
         toast.error("Failed to fetch availability")
       }

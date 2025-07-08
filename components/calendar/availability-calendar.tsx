@@ -57,11 +57,11 @@ export function AvailabilityCalendar({
       try {
         setIsLoading(true)
         const [availabilityRes, eventsRes] = await Promise.all([
-          api.get(`/users/${userId}/availability`),
-          api.get(`/users/${userId}/events`)
+          api.getUserAvailability(userId),
+          api.getUserEvents(userId)
         ])
         setAvailability(availabilityRes.data || [])
-        setEvents(eventsRes.data || [])
+        setEvents(eventsRes.data?.data || [])
         setIsLoading(false)
       } catch (error) {
         console.error("Failed to fetch calendar data:", error)
@@ -84,7 +84,7 @@ export function AvailabilityCalendar({
       if (deleteMode) {
         // Delete availability entry entirely
         if (existingAvailability) {
-          await api.delete(`/users/${userId}/availability/${existingAvailability.id}`)
+          await api.deleteAvailabilityEntry(userId, existingAvailability.id.toString())
           setAvailability(prev => prev.filter(a =>
             format(parseISO(a.date), "yyyy-MM-dd") !== dateStr
           ))
@@ -94,29 +94,26 @@ export function AvailabilityCalendar({
         // Toggle availability
         const newAvailability = {
           date: dateStr,
-          isAvailable: !existingAvailability?.isAvailable,
+          isAvailable: !existingAvailability?.is_available,
           startTime: "09:00",
           endTime: "17:00"
         }
 
         if (existingAvailability) {
           // Update existing
-          await api.put(`/users/${userId}/availability/${existingAvailability.id}`, newAvailability)
+          await api.updateAvailabilityEntry(userId, existingAvailability.id.toString(), {
+            isAvailable: newAvailability.isAvailable
+          })
         } else {
           // Create new
-          await api.post(`/users/${userId}/availability`, newAvailability)
+          await api.createAvailabilityEntry(userId, newAvailability)
         }
 
-        setAvailability(prev => {
-          if (existingAvailability) {
-            return prev.map(a =>
-              format(parseISO(a.date), "yyyy-MM-dd") === dateStr
-                ? { ...a, isAvailable: !a.isAvailable }
-                : a
-            )
-          }
-          return [...prev, { ...newAvailability, date: new Date(dateStr).toISOString() }]
-        })
+        // Reload availability data
+        const response = await api.getUserAvailability(userId)
+        if (response.success && response.data) {
+          setAvailability(response.data)
+        }
 
         toast.success("Availability updated")
       }
@@ -142,13 +139,13 @@ export function AvailabilityCalendar({
         setSelectedViewers(prev => [...prev, viewerId])
         // Fetch viewer's availability and events
         const [viewerAvailability, viewerEvents] = await Promise.all([
-          api.get(`/users/${viewerId}/availability`),
-          api.get(`/users/${viewerId}/events`)
+          api.getUserAvailability(viewerId),
+          api.getUserEvents(viewerId)
         ])
 
         // Add viewer's data to display (with different styling)
-        if (viewerEvents.data) {
-          setEvents(prev => [...prev, ...viewerEvents.data.map(event => ({
+        if (viewerEvents.success && viewerEvents.data?.data) {
+          setEvents(prev => [...prev, ...viewerEvents.data.data.map(event => ({
             ...event,
             isViewer: true,
             viewerName: viewers.find(v => v.id === viewerId)?.name || 'Unknown'

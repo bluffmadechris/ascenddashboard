@@ -242,41 +242,68 @@ class ApiClient {
     id: number,
     updates: Partial<User>
   ): Promise<ApiResponse<{ user: User }>> {
-    // Map frontend field names to API field names
-    const apiUpdates = { ...updates };
+    // Check if this is a profile update (bio, socialMedia, avatar)
+    const isProfileUpdate = 'bio' in updates || 'socialMedia' in updates || 'avatar' in updates;
     
-    // Map avatar to avatar_url for API compatibility
-    if ('avatar' in apiUpdates) {
-      apiUpdates.avatar_url = apiUpdates.avatar as string;
-      delete apiUpdates.avatar;
-    }
-    
-    // Store bio in a field that exists in the API (use department field for bio storage)
-    if ('bio' in apiUpdates) {
-      // Store bio in the department field as a workaround
-      apiUpdates.department = apiUpdates.bio as string;
-      delete apiUpdates.bio;
-    }
-    
-    // Remove fields that don't exist in the API
-    const fieldsToRemove = ['socialMedia', 'customLinks', 'clientAccess', 'password'];
-    fieldsToRemove.forEach(field => {
-      if (field in apiUpdates) {
-        delete apiUpdates[field as keyof typeof apiUpdates];
+    if (isProfileUpdate) {
+      // Use the profile-specific endpoint
+      const profileUpdates = {
+        bio: updates.bio,
+        avatarUrl: updates.avatar,
+        socialLinks: updates.socialMedia,
+        phone: updates.phone,
+        contactVisible: updates.contactVisible,
+      };
+      
+      // Remove undefined fields
+      Object.keys(profileUpdates).forEach(key => {
+        if (profileUpdates[key as keyof typeof profileUpdates] === undefined) {
+          delete profileUpdates[key as keyof typeof profileUpdates];
+        }
+      });
+      
+      const response = await this.put<User>(`/users/${id}/profile`, profileUpdates);
+      
+      // Map the response to the expected format
+      if (response.success && response.data) {
+        return {
+          success: true,
+          message: response.message,
+          data: { user: response.data }
+        };
       }
-    });
-    
-    const response = await this.put<{ user: User }>(`/users/${id}`, apiUpdates);
-    
-    // Map API response field names back to frontend field names
-    if (response.success && response.data?.user) {
-      const user = response.data.user;
-      if ('avatar_url' in user) {
-        user.avatar = user.avatar_url as string;
+      
+      return response as ApiResponse<{ user: User }>;
+    } else {
+      // Use the regular user update endpoint for other fields
+      const apiUpdates = { ...updates };
+      
+      // Map avatar to avatar_url for API compatibility
+      if ('avatar' in apiUpdates) {
+        apiUpdates.avatar_url = apiUpdates.avatar as string;
+        delete apiUpdates.avatar;
       }
+      
+      // Remove fields that don't exist in the API
+      const fieldsToRemove = ['clientAccess', 'password', 'socialMedia', 'bio'];
+      fieldsToRemove.forEach(field => {
+        if (field in apiUpdates) {
+          delete apiUpdates[field as keyof typeof apiUpdates];
+        }
+      });
+      
+      const response = await this.put<{ user: User }>(`/users/${id}`, apiUpdates);
+      
+      // Map API response field names back to frontend field names
+      if (response.success && response.data?.user) {
+        const user = response.data.user;
+        if ('avatar_url' in user) {
+          user.avatar = user.avatar_url as string;
+        }
+      }
+      
+      return response;
     }
-    
-    return response;
   }
   
   async deleteUser(id: number): Promise<ApiResponse> {
@@ -509,8 +536,6 @@ class ApiClient {
 
   // Password change request methods
   async createPasswordChangeRequest(data: {
-    userId: string
-    newPassword: string
     reason: string
   }): Promise<ApiResponse> {
     return this.post('/auth/password-change-requests', data);
@@ -521,7 +546,6 @@ class ApiClient {
       id: string
       userId: string
       userName: string
-      newPassword: string
       reason: string
       status: "pending" | "approved" | "denied"
       createdAt: string
@@ -531,8 +555,8 @@ class ApiClient {
     return this.get('/auth/password-change-requests');
   }
 
-  async approvePasswordChangeRequest(requestId: string): Promise<ApiResponse> {
-    return this.post(`/auth/password-change-requests/${requestId}/approve`);
+  async approvePasswordChangeRequest(requestId: string, newPassword: string): Promise<ApiResponse> {
+    return this.post(`/auth/password-change-requests/${requestId}/approve`, { newPassword });
   }
 
   async denyPasswordChangeRequest(requestId: string): Promise<ApiResponse> {
@@ -541,14 +565,53 @@ class ApiClient {
 
   async updateInvoiceStatus(invoiceId: string, status: string): Promise<ApiResponse<any>> {
     const response = await this.put(`/invoices/status/${invoiceId}`, { status });
-    if (!response.success && response.data) {
-      return {
-        success: false,
-        message: response.message || 'Failed to update invoice status',
-        data: response.data
-      };
+    
+    // If the response is successful, return it as-is
+    if (response.success) {
+      return response;
     }
-    return response;
+    
+    // If the response failed, ensure we return a proper error response
+    return {
+      success: false,
+      message: response.message || 'Failed to update invoice status',
+      data: response.data
+    };
+  }
+
+  // Availability management methods
+  async getUserAvailability(userId: string): Promise<ApiResponse<any[]>> {
+    return this.get(`/users/${userId}/availability`);
+  }
+
+  async createAvailabilityEntry(userId: string, data: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    isAvailable: boolean;
+  }): Promise<ApiResponse<any>> {
+    return this.post(`/users/${userId}/availability`, data);
+  }
+
+  async updateAvailabilityEntry(userId: string, availabilityId: string, data: {
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    isAvailable?: boolean;
+  }): Promise<ApiResponse<any>> {
+    return this.put(`/users/${userId}/availability/${availabilityId}`, data);
+  }
+
+  async deleteAvailabilityEntry(userId: string, availabilityId: string): Promise<ApiResponse> {
+    return this.delete(`/users/${userId}/availability/${availabilityId}`);
+  }
+
+  async getUserEvents(userId: string): Promise<ApiResponse<{ data: any[] }>> {
+    return this.get(`/users/${userId}/events`);
+  }
+
+  async getTeamMembers(): Promise<ApiResponse<any[]>> {
+    return this.get('/users/team-members');
   }
 }
 

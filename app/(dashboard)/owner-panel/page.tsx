@@ -19,7 +19,6 @@ import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { Button } from "@/components/ui/button"
 import { TeamProfileEditor } from "@/components/dashboard/team-profile-editor"
 import { SendNotificationForm } from "@/components/dashboard/send-notification"
-import { ProfitStatsManager } from "@/components/dashboard/profit-stats-manager"
 import { api } from "@/lib/api-client"
 import { toast } from "sonner"
 
@@ -321,10 +320,6 @@ export default function OwnerPanelPage() {
           <StrikesManagement />
         </TabsContent>
       </Tabs>
-
-      <div className="grid gap-6">
-        <ProfitStatsManager />
-      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>

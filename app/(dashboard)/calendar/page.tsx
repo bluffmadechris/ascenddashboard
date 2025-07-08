@@ -145,6 +145,7 @@ export default function CalendarPage() {
 
         if (selectedEmployees.length > 0) {
           // Load events for ONLY selected employees (not current user)
+          console.log('Loading events for selected employees only:', selectedEmployees)
           allEvents = await getEventsForUsers(selectedEmployees)
 
           // Apply user colors to events
@@ -152,8 +153,38 @@ export default function CalendarPage() {
             ...event,
             color: event.color || getUserCalendarColor(event.createdBy)
           }))
+
+          // Ensure we don't include current user's events by explicitly filtering them out
+          const userId = String(user.id)
+          const numericUserId = Number(user.id)
+
+          allEvents = allEvents.filter(event => {
+            const eventCreatedBy = String(event.createdBy)
+            const eventCreatedByNumeric = Number(event.createdBy)
+
+            // Exclude events created by current user
+            if (eventCreatedByNumeric === numericUserId || eventCreatedBy === userId) {
+              return false
+            }
+
+            // Exclude events where current user is an attendee unless they're the only attendee
+            const attendeesAsNumbers = event.attendees?.map(Number) || []
+            const attendeesAsStrings = event.attendees?.map(String) || []
+
+            if (attendeesAsNumbers.includes(numericUserId) || attendeesAsStrings.includes(userId)) {
+              // Only include if there are other attendees besides current user
+              const otherAttendees = attendeesAsNumbers.filter(id => id !== numericUserId)
+              const otherAttendeesStrings = attendeesAsStrings.filter(id => id !== userId)
+              return otherAttendees.length > 0 || otherAttendeesStrings.length > 0
+            }
+
+            return true
+          })
+
+          console.log('Filtered events for selected employees:', allEvents.length, 'events')
         } else {
           // Load only current user's events
+          console.log('Loading events for current user only')
           const loadedEvents = await loadCalendarEvents()
 
           // Convert user.id to string for comparison since API returns numbers
@@ -170,6 +201,8 @@ export default function CalendarPage() {
 
             return isCreator || isAttendee
           })
+
+          console.log('Loaded events for current user:', allEvents.length, 'events')
         }
 
         // Load meeting requests and convert them to events
@@ -185,6 +218,7 @@ export default function CalendarPage() {
 
         // Combine regular events with meeting request events
         const combinedEvents = [...allEvents, ...meetingRequestEvents]
+        console.log('Final combined events:', combinedEvents.length, 'events')
         setEvents(combinedEvents)
       } catch (error) {
         console.error("Error loading calendar events:", error)
