@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from "@/lib/auth-context"
@@ -31,7 +33,6 @@ interface PasswordChangeRequest {
     id: string
     userId: string
     userName: string
-    newPassword: string
     reason: string
     status: "pending" | "approved" | "denied"
     createdAt: string
@@ -46,6 +47,7 @@ export function PasswordChangeRequestsList() {
     const [selectedRequest, setSelectedRequest] = useState<PasswordChangeRequest | null>(null)
     const [showApproveDialog, setShowApproveDialog] = useState(false)
     const [showDenyDialog, setShowDenyDialog] = useState(false)
+    const [newPassword, setNewPassword] = useState("")
 
     useEffect(() => {
         if (user?.role === "owner") {
@@ -89,10 +91,15 @@ export function PasswordChangeRequestsList() {
     }
 
     const handleApprove = async () => {
-        if (!selectedRequest) return
+        if (!selectedRequest || !newPassword) return
+
+        if (newPassword.length < 6) {
+            toast.error("Password must be at least 6 characters long")
+            return
+        }
 
         try {
-            const response = await apiClient.approvePasswordChangeRequest(selectedRequest.id)
+            const response = await apiClient.approvePasswordChangeRequest(selectedRequest.id, newPassword)
             if (!response.success) {
                 throw new Error(response.message || "Failed to approve request")
             }
@@ -105,6 +112,7 @@ export function PasswordChangeRequestsList() {
         } finally {
             setShowApproveDialog(false)
             setSelectedRequest(null)
+            setNewPassword("")
         }
     }
 
@@ -216,19 +224,35 @@ export function PasswordChangeRequestsList() {
                 )}
             </CardContent>
 
-            <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+            <AlertDialog open={showApproveDialog} onOpenChange={(open) => {
+                setShowApproveDialog(open)
+                if (!open) {
+                    setNewPassword("")
+                }
+            }}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Approve Password Change</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Are you sure you want to approve this password change request? This will
-                            immediately update the user's password.
+                            Set a new password for {selectedRequest?.userName}. This will immediately update their password.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="newPassword">New Password</Label>
+                        <Input
+                            id="newPassword"
+                            type="password"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Enter the new password"
+                            minLength={6}
+                            required
+                        />
+                    </div>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleApprove}>
-                            Approve
+                        <AlertDialogAction onClick={handleApprove} disabled={!newPassword || newPassword.length < 6}>
+                            Approve & Set Password
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

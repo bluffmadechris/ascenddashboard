@@ -11,22 +11,19 @@ import { useAuth } from "@/lib/auth-context"
 
 export function PasswordChangeRequestForm() {
     const { user } = useAuth()
-    const [newPassword, setNewPassword] = useState("")
     const [reason, setReason] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!newPassword || !reason) {
-            toast.error("Please fill in all fields")
+        if (!reason) {
+            toast.error("Please provide a reason for the password change")
             return
         }
 
         setIsSubmitting(true)
         try {
             const response = await apiClient.createPasswordChangeRequest({
-                userId: user?.id,
-                newPassword,
                 reason,
             })
 
@@ -35,7 +32,6 @@ export function PasswordChangeRequestForm() {
             }
 
             toast.success("Password change request submitted successfully")
-            setNewPassword("")
             setReason("")
         } catch (error) {
             console.error("Error submitting password change request:", error)
@@ -54,23 +50,11 @@ export function PasswordChangeRequestForm() {
             <CardHeader>
                 <CardTitle>Request Password Change</CardTitle>
                 <CardDescription>
-                    Submit a request to change your password. An owner will review and approve or deny your request.
+                    Submit a request to change your password. An owner will review your request and set a new password for you if approved.
                 </CardDescription>
             </CardHeader>
             <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="newPassword">New Password</Label>
-                        <Input
-                            id="newPassword"
-                            type="password"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="Enter your desired new password"
-                            minLength={8}
-                            required
-                        />
-                    </div>
                     <div className="space-y-2">
                         <Label htmlFor="reason">Reason for Change</Label>
                         <Input
