@@ -183,15 +183,9 @@ export function TeamMemberCard({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <a
-                          href={user.socialMedia.twitter}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-primary transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="text-muted-foreground hover:text-primary transition-colors cursor-default">
                           <Twitter className="h-4 w-4" />
-                        </a>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent>Twitter</TooltipContent>
                     </Tooltip>
@@ -201,15 +195,9 @@ export function TeamMemberCard({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <a
-                          href={user.socialMedia.linkedin}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-primary transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="text-muted-foreground hover:text-primary transition-colors cursor-default">
                           <Linkedin className="h-4 w-4" />
-                        </a>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent>LinkedIn</TooltipContent>
                     </Tooltip>
@@ -219,15 +207,9 @@ export function TeamMemberCard({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <a
-                          href={user.socialMedia.instagram}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-primary transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="text-muted-foreground hover:text-primary transition-colors cursor-default">
                           <Instagram className="h-4 w-4" />
-                        </a>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent>Instagram</TooltipContent>
                     </Tooltip>
@@ -237,15 +219,9 @@ export function TeamMemberCard({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <a
-                          href={user.socialMedia.facebook}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-primary transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="text-muted-foreground hover:text-primary transition-colors cursor-default">
                           <Facebook className="h-4 w-4" />
-                        </a>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent>Facebook</TooltipContent>
                     </Tooltip>
@@ -255,15 +231,9 @@ export function TeamMemberCard({
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <a
-                          href={user.socialMedia.youtube}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-primary transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="text-muted-foreground hover:text-primary transition-colors cursor-default">
                           <Youtube className="h-4 w-4" />
-                        </a>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent>YouTube</TooltipContent>
                     </Tooltip>
@@ -273,15 +243,9 @@ export function TeamMemberCard({
                   <TooltipProvider key={index}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <a
-                          href={link.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted-foreground hover:text-primary transition-colors"
-                          onClick={(e) => e.stopPropagation()}
-                        >
+                        <div className="text-muted-foreground hover:text-primary transition-colors cursor-default">
                           <LinkIcon className="h-4 w-4" />
-                        </a>
+                        </div>
                       </TooltipTrigger>
                       <TooltipContent>{link.title}</TooltipContent>
                     </Tooltip>

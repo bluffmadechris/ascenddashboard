@@ -106,10 +106,16 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
               })
             })
           } else if (value && typeof value === 'string') {
+            // Extract username from full URL by removing the platform prefix
+            const platformConfig = socialPlatforms[platform as keyof typeof socialPlatforms]
+            let username = value
+            if (platformConfig && platformConfig.prefix && value.startsWith(platformConfig.prefix)) {
+              username = value.replace(platformConfig.prefix, '')
+            }
             links.push({
               id: crypto.randomUUID(),
               platform: platform,
-              username: value,
+              username: username,
             })
           }
         })
@@ -134,7 +140,15 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
               url: link.username,
             })
           } else {
-            socialMedia[link.platform as keyof Omit<SocialMediaLinks, 'customLinks'>] = link.username
+            // Get the platform configuration to construct the full URL
+            const platform = socialPlatforms[link.platform as keyof typeof socialPlatforms]
+            if (platform) {
+              // If username already contains http/https, use it as is, otherwise add prefix
+              const fullUrl = link.username.includes('http')
+                ? link.username
+                : platform.prefix + link.username
+              socialMedia[link.platform as keyof Omit<SocialMediaLinks, 'customLinks'>] = fullUrl
+            }
           }
         }
       })
