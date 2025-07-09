@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 import {
     DollarSign,
     TrendingUp,
@@ -23,7 +24,11 @@ import {
     ArrowUpRight,
     ArrowDownRight,
     ArrowRight,
-    MoreHorizontal
+    MoreHorizontal,
+    Download,
+    RefreshCw,
+    Settings,
+    Eye
 } from "lucide-react"
 import {
     ResponsiveContainer,
@@ -33,10 +38,19 @@ import {
     CartesianGrid,
     Tooltip
 } from "recharts"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+    DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu"
 import { apiClient } from "@/lib/api-client"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
+import { jsPDF } from "jspdf"
+import autoTable from "jspdf-autotable"
 
 interface FinancialSummary {
     totalRevenue: number
@@ -91,6 +105,30 @@ export function FinancialAnalytics() {
     const [activeChart, setActiveChart] = useState<string>("revenue")
     const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false)
     const [isAddAdjustmentOpen, setIsAddAdjustmentOpen] = useState(false)
+    const [showDetailsModal, setShowDetailsModal] = useState(false)
+    const [showSettingsModal, setShowSettingsModal] = useState(false)
+
+    // Settings state
+    const [settings, setSettings] = useState({
+        defaultPeriod: '12months',
+        defaultChart: 'revenue',
+        showChangeIndicators: true,
+        showGridLines: true,
+        enableSounds: false,
+        autoRefresh: false,
+        refreshInterval: 300, // seconds
+        exportFormat: 'pdf',
+        showTransactionTypes: {
+            invoice_payment: true,
+            expense: true,
+            profit_adjustment: true
+        },
+        chartColors: {
+            revenue: '#22c55e',
+            expenses: '#ef4444',
+            profit: '#3b82f6'
+        }
+    })
 
     // Expense form state
     const [expenseForm, setExpenseForm] = useState({
@@ -114,7 +152,7 @@ export function FinancialAnalytics() {
             setIsLoading(true)
             const response = await apiClient.get(`/dashboard/financial-analytics?period=${selectedPeriod}`)
             if (response.success) {
-                setAnalytics(response.data)
+                setAnalytics(response.data as FinancialAnalytics)
             }
         } catch (error) {
             console.error('Error fetching analytics:', error)
@@ -129,13 +167,204 @@ export function FinancialAnalytics() {
         try {
             const response = await apiClient.get(`/dashboard/expenses?period=${selectedPeriod}`)
             if (response.success) {
-                setExpenses(response.data.expenses)
+                setExpenses((response.data as any).expenses)
             }
         } catch (error) {
             console.error('Error fetching expenses:', error)
             toast.error('Failed to fetch expenses')
         }
     }
+
+    // Refresh all data
+    const refreshData = async () => {
+        try {
+            toast.info('Refreshing financial data...')
+            await Promise.all([
+                fetchAnalytics(),
+                fetchExpenses()
+            ])
+            toast.success('Financial data refreshed successfully!')
+        } catch (error) {
+            toast.error('Failed to refresh data')
+        }
+    }
+
+    // Download financial analytics report
+    const downloadReport = () => {
+        try {
+            console.log('Starting PDF generation...')
+            console.log('Analytics data:', analytics)
+            
+            if (!analytics) {
+                toast.error('No analytics data available for report generation')
+                return
+            }
+
+            const doc = new jsPDF()
+
+            // Initialize autoTable plugin
+            autoTable(doc, {})
+
+            // Header
+            doc.setFontSize(20)
+            doc.setFont("helvetica", "bold")
+            doc.text("Financial Analytics Report", 20, 20)
+
+            // Date range
+            doc.setFontSize(12)
+            doc.setFont("helvetica", "normal")
+            doc.text(`Period: ${selectedPeriod}`, 20, 30)
+            doc.text(`Generated: ${format(new Date(), 'MMM dd, yyyy')}`, 20, 40)
+
+            let yPosition = 55
+
+            // Financial Summary
+            doc.setFontSize(14)
+            doc.setFont("helvetica", "bold")
+            doc.text("Financial Summary", 20, yPosition)
+            yPosition += 10
+
+            if (analytics.summary) {
+                doc.setFontSize(11)
+                doc.setFont("helvetica", "normal")
+                doc.text(`Total Revenue: $${(analytics.summary.totalRevenue || 0).toLocaleString()}`, 20, yPosition)
+                doc.text(`Total Expenses: $${(analytics.summary.totalExpenses || 0).toLocaleString()}`, 20, yPosition + 7)
+                doc.text(`Profit Added: $${(analytics.summary.totalProfitAdded || 0).toLocaleString()}`, 20, yPosition + 14)
+                doc.text(`Net Profit: $${(analytics.summary.netProfit || 0).toLocaleString()}`, 20, yPosition + 21)
+                yPosition += 35
+            }
+
+            // Expense Categories
+            if (analytics.expenseCategories && analytics.expenseCategories.length > 0) {
+                doc.setFontSize(14)
+                doc.setFont("helvetica", "bold")
+                doc.text("Expense Categories", 20, yPosition)
+                yPosition += 10
+
+                const categoryData = analytics.expenseCategories.map(category => [
+                    category.category || 'Unknown',
+                    `$${(category.total_amount || 0).toLocaleString()}`,
+                    (category.transaction_count || 0).toString()
+                ])
+
+                autoTable(doc, {
+                    head: [['Category', 'Total Amount', 'Transactions']],
+                    body: categoryData,
+                    startY: yPosition,
+                    theme: "grid",
+                    styles: { fontSize: 9, cellPadding: 5 },
+                    headStyles: { fillColor: [51, 51, 51], textColor: [255, 255, 255] },
+                    alternateRowStyles: { fillColor: [245, 245, 245] },
+                })
+
+                yPosition = (doc as any).lastAutoTable.finalY + 15
+            }
+
+            // Recent Transactions
+            if (analytics.recentTransactions && analytics.recentTransactions.length > 0) {
+                doc.setFontSize(14)
+                doc.setFont("helvetica", "bold")
+                doc.text("Recent Transactions", 20, yPosition)
+                yPosition += 10
+
+                const transactionData = analytics.recentTransactions.slice(0, 10).map(transaction => [
+                    transaction.description || 'No description',
+                    (transaction.transaction_type || 'unknown').replace('_', ' '),
+                    `$${Math.abs(transaction.amount || 0).toLocaleString()}`,
+                    transaction.created_at ? format(new Date(transaction.created_at), 'MMM dd, yyyy') : 'Unknown date'
+                ])
+
+                autoTable(doc, {
+                    head: [['Description', 'Type', 'Amount', 'Date']],
+                    body: transactionData,
+                    startY: yPosition,
+                    theme: "grid",
+                    styles: { fontSize: 9, cellPadding: 5 },
+                    headStyles: { fillColor: [51, 51, 51], textColor: [255, 255, 255] },
+                    alternateRowStyles: { fillColor: [245, 245, 245] },
+                })
+
+                yPosition = (doc as any).lastAutoTable.finalY + 15
+            }
+
+            // Add footer
+            const pageHeight = doc.internal.pageSize.height
+            doc.setFontSize(8)
+            doc.setFont("helvetica", "normal")
+            doc.text("Generated by Ascend Financial Analytics", 20, pageHeight - 10)
+
+            // Save the PDF
+            const fileName = `Financial-Analytics-Report-${format(new Date(), 'yyyy-MM-dd')}.pdf`
+            console.log('Saving PDF with filename:', fileName)
+            doc.save(fileName)
+            toast.success('Financial report downloaded successfully!')
+        } catch (error) {
+            console.error('Error generating report:', error)
+            toast.error(`Failed to generate report: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        }
+    }
+
+    // Settings functions
+    const handleSettingsChange = (key: keyof typeof settings, value: any) => {
+        setSettings(prev => ({
+            ...prev,
+            [key]: value
+        }))
+    }
+
+    const handleNestedSettingsChange = (parent: keyof typeof settings, key: string, value: any) => {
+        setSettings(prev => ({
+            ...prev,
+            [parent]: {
+                ...(prev[parent] as any),
+                [key]: value
+            }
+        }))
+    }
+
+    const resetSettings = () => {
+        setSettings({
+            defaultPeriod: '12months',
+            defaultChart: 'revenue',
+            showChangeIndicators: true,
+            showGridLines: true,
+            enableSounds: false,
+            autoRefresh: false,
+            refreshInterval: 300,
+            exportFormat: 'pdf',
+            showTransactionTypes: {
+                invoice_payment: true,
+                expense: true,
+                profit_adjustment: true
+            },
+            chartColors: {
+                revenue: '#22c55e',
+                expenses: '#ef4444',
+                profit: '#3b82f6'
+            }
+        })
+        toast.success('Settings reset to default values')
+    }
+
+    const saveSettings = () => {
+        // In a real app, you would save to localStorage or API
+        localStorage.setItem('financial-analytics-settings', JSON.stringify(settings))
+        toast.success('Settings saved successfully')
+        setShowSettingsModal(false)
+    }
+
+    // Load settings on component mount
+    useEffect(() => {
+        const savedSettings = localStorage.getItem('financial-analytics-settings')
+        if (savedSettings) {
+            try {
+                const parsed = JSON.parse(savedSettings)
+                setSettings(parsed)
+            } catch (error) {
+                console.error('Error loading settings:', error)
+            }
+        }
+    }, [])
 
     useEffect(() => {
         fetchAnalytics()
@@ -380,6 +609,472 @@ export function FinancialAnalytics() {
                 </div>
             </div>
 
+            {/* Detailed Analytics Modal */}
+            <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Calculator className="h-5 w-5" />
+                            Financial Analytics Details
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {analytics && (
+                        <div className="space-y-6">
+                            {/* Financial Summary Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <Card>
+                                    <CardContent className="p-4">
+                                        <div className="text-sm text-muted-foreground">Total Revenue</div>
+                                        <div className="text-2xl font-bold text-green-600">
+                                            {formatCurrency(analytics.summary.totalRevenue)}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardContent className="p-4">
+                                        <div className="text-sm text-muted-foreground">Total Expenses</div>
+                                        <div className="text-2xl font-bold text-red-600">
+                                            {formatCurrency(analytics.summary.totalExpenses)}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardContent className="p-4">
+                                        <div className="text-sm text-muted-foreground">Profit Added</div>
+                                        <div className="text-2xl font-bold text-blue-600">
+                                            {formatCurrency(analytics.summary.totalProfitAdded)}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardContent className="p-4">
+                                        <div className="text-sm text-muted-foreground">Net Profit</div>
+                                        <div className={`text-2xl font-bold ${analytics.summary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                                            }`}>
+                                            {formatCurrency(analytics.summary.netProfit)}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Current Balance */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Current Profit Balance</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-3xl font-bold text-center py-4">
+                                        <span className={analytics.currentBalance.current_profit_balance >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                            {formatCurrency(analytics.currentBalance.current_profit_balance)}
+                                        </span>
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Detailed Breakdown */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Revenue Analytics */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg">Revenue Analytics</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-3">
+                                            {analytics.revenueAnalytics.map((item, index) => (
+                                                <div key={index} className="flex justify-between items-center p-2 border rounded">
+                                                    <span className="text-sm">{item.period} month{item.period !== '1' ? 's' : ''}</span>
+                                                    <span className="font-bold text-green-600">
+                                                        {formatCurrency(item.revenue || 0)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Expense Analytics */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg">Expense Analytics</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="space-y-3">
+                                            {analytics.expenseAnalytics.map((item, index) => (
+                                                <div key={index} className="flex justify-between items-center p-2 border rounded">
+                                                    <span className="text-sm">{item.period} month{item.period !== '1' ? 's' : ''}</span>
+                                                    <span className="font-bold text-red-600">
+                                                        {formatCurrency(item.total_expenses || 0)}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Expense Categories */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Expense Categories Breakdown</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3">
+                                        {analytics.expenseCategories.map((category, index) => (
+                                            <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-4 h-4 rounded-full bg-primary"></div>
+                                                    <div>
+                                                        <div className="font-medium">{category.category}</div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {category.transaction_count} transactions
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="font-bold text-red-600">
+                                                    {formatCurrency(category.total_amount)}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {analytics.expenseCategories.length === 0 && (
+                                            <p className="text-center text-muted-foreground py-4">
+                                                No expense categories found
+                                            </p>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Recent Transactions */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Recent Transactions</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                                        {analytics.recentTransactions.map((transaction, index) => (
+                                            <div key={index} className="flex justify-between items-center p-3 border rounded-lg">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-3 h-3 rounded-full ${transaction.transaction_type === 'invoice_payment' ? 'bg-red-500' :
+                                                        transaction.transaction_type === 'expense' ? 'bg-orange-500' :
+                                                            transaction.transaction_type === 'profit_adjustment' ? 'bg-blue-500' :
+                                                                'bg-gray-500'
+                                                        }`} />
+                                                    <div>
+                                                        <div className="font-medium">{transaction.description}</div>
+                                                        <div className="text-sm text-muted-foreground">
+                                                            {transaction.created_by_name} • {format(new Date(transaction.created_at), 'MMM d, yyyy h:mm a')}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <Badge variant="outline" className="text-xs mb-1">
+                                                        {transaction.transaction_type.replace('_', ' ')}
+                                                    </Badge>
+                                                    <div className={`font-bold ${transaction.transaction_type === 'invoice_payment' ? 'text-red-600' :
+                                                        transaction.transaction_type === 'expense' ? 'text-orange-600' :
+                                                            transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                                                        }`}>
+                                                        {(transaction.transaction_type === 'invoice_payment' || transaction.transaction_type === 'expense') ? '-' : ''}
+                                                        {formatCurrency(Math.abs(transaction.amount))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {analytics.recentTransactions.length === 0 && (
+                                            <p className="text-center text-muted-foreground py-4">
+                                                No recent transactions
+                                            </p>
+                                        )}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Settings Modal */}
+            <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Settings className="h-5 w-5" />
+                            Financial Analytics Settings
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-6">
+                        {/* Default Preferences */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Default Preferences</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="defaultPeriod">Default Time Period</Label>
+                                    <Select
+                                        value={settings.defaultPeriod}
+                                        onValueChange={(value) => handleSettingsChange('defaultPeriod', value)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="1months">1 Month</SelectItem>
+                                            <SelectItem value="3months">3 Months</SelectItem>
+                                            <SelectItem value="6months">6 Months</SelectItem>
+                                            <SelectItem value="12months">12 Months</SelectItem>
+                                            <SelectItem value="24months">24 Months</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="defaultChart">Default Chart View</Label>
+                                    <Select
+                                        value={settings.defaultChart}
+                                        onValueChange={(value) => handleSettingsChange('defaultChart', value)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="revenue">Revenue</SelectItem>
+                                            <SelectItem value="expenses">Expenses</SelectItem>
+                                            <SelectItem value="profit-added">Profit Added</SelectItem>
+                                            <SelectItem value="net-profit">Net Profit</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label htmlFor="exportFormat">Default Export Format</Label>
+                                    <Select
+                                        value={settings.exportFormat}
+                                        onValueChange={(value) => handleSettingsChange('exportFormat', value)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="pdf">PDF</SelectItem>
+                                            <SelectItem value="excel">Excel</SelectItem>
+                                            <SelectItem value="csv">CSV</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Display Settings */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Display Settings</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>Show Change Indicators</Label>
+                                        <div className="text-sm text-muted-foreground">
+                                            Display percentage changes and trend arrows
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={settings.showChangeIndicators}
+                                        onCheckedChange={(checked) => handleSettingsChange('showChangeIndicators', checked)}
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>Show Grid Lines</Label>
+                                        <div className="text-sm text-muted-foreground">
+                                            Display grid lines on charts
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={settings.showGridLines}
+                                        onCheckedChange={(checked) => handleSettingsChange('showGridLines', checked)}
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>Enable Sounds</Label>
+                                        <div className="text-sm text-muted-foreground">
+                                            Play sound notifications for updates
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={settings.enableSounds}
+                                        onCheckedChange={(checked) => handleSettingsChange('enableSounds', checked)}
+                                    />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Auto-refresh Settings */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Auto-refresh Settings</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label>Enable Auto-refresh</Label>
+                                        <div className="text-sm text-muted-foreground">
+                                            Automatically refresh data at regular intervals
+                                        </div>
+                                    </div>
+                                    <Switch
+                                        checked={settings.autoRefresh}
+                                        onCheckedChange={(checked) => handleSettingsChange('autoRefresh', checked)}
+                                    />
+                                </div>
+
+                                {settings.autoRefresh && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="refreshInterval">Refresh Interval (seconds)</Label>
+                                        <Input
+                                            id="refreshInterval"
+                                            type="number"
+                                            min="30"
+                                            max="3600"
+                                            value={settings.refreshInterval}
+                                            onChange={(e) => handleSettingsChange('refreshInterval', parseInt(e.target.value))}
+                                        />
+                                        <div className="text-sm text-muted-foreground">
+                                            Minimum: 30 seconds, Maximum: 1 hour
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Transaction Type Visibility */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Transaction Type Visibility</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                                        <Label>Invoice Payments</Label>
+                                    </div>
+                                    <Switch
+                                        checked={settings.showTransactionTypes.invoice_payment}
+                                        onCheckedChange={(checked) => handleNestedSettingsChange('showTransactionTypes', 'invoice_payment', checked)}
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                                        <Label>Expenses</Label>
+                                    </div>
+                                    <Switch
+                                        checked={settings.showTransactionTypes.expense}
+                                        onCheckedChange={(checked) => handleNestedSettingsChange('showTransactionTypes', 'expense', checked)}
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                                        <Label>Profit Adjustments</Label>
+                                    </div>
+                                    <Switch
+                                        checked={settings.showTransactionTypes.profit_adjustment}
+                                        onCheckedChange={(checked) => handleNestedSettingsChange('showTransactionTypes', 'profit_adjustment', checked)}
+                                    />
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Chart Colors */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Chart Colors</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="revenueColor">Revenue Color</Label>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                id="revenueColor"
+                                                type="color"
+                                                value={settings.chartColors.revenue}
+                                                onChange={(e) => handleNestedSettingsChange('chartColors', 'revenue', e.target.value)}
+                                                className="w-8 h-8 rounded border"
+                                            />
+                                            <Input
+                                                value={settings.chartColors.revenue}
+                                                onChange={(e) => handleNestedSettingsChange('chartColors', 'revenue', e.target.value)}
+                                                className="flex-1"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="expensesColor">Expenses Color</Label>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                id="expensesColor"
+                                                type="color"
+                                                value={settings.chartColors.expenses}
+                                                onChange={(e) => handleNestedSettingsChange('chartColors', 'expenses', e.target.value)}
+                                                className="w-8 h-8 rounded border"
+                                            />
+                                            <Input
+                                                value={settings.chartColors.expenses}
+                                                onChange={(e) => handleNestedSettingsChange('chartColors', 'expenses', e.target.value)}
+                                                className="flex-1"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="profitColor">Profit Color</Label>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                id="profitColor"
+                                                type="color"
+                                                value={settings.chartColors.profit}
+                                                onChange={(e) => handleNestedSettingsChange('chartColors', 'profit', e.target.value)}
+                                                className="w-8 h-8 rounded border"
+                                            />
+                                            <Input
+                                                value={settings.chartColors.profit}
+                                                onChange={(e) => handleNestedSettingsChange('chartColors', 'profit', e.target.value)}
+                                                className="flex-1"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between pt-4 border-t">
+                        <Button variant="outline" onClick={resetSettings}>
+                            Reset to Defaults
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" onClick={() => setShowSettingsModal(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={saveSettings}>
+                                Save Settings
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Main Analytics Chart Card */}
             <Card className="border border-border">
                 <CardHeader className="flex flex-col space-y-4">
@@ -387,14 +1082,46 @@ export function FinancialAnalytics() {
                         <div className="flex flex-col gap-y-2">
                             <CardTitle className="text-lg font-medium">Financial Overview</CardTitle>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => {
+                                    downloadReport()
+                                }}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Download Report
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                    refreshData()
+                                }}>
+                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                    Refresh Data
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => {
+                                    setShowSettingsModal(true)
+                                }}>
+                                    <Settings className="mr-2 h-4 w-4" />
+                                    Settings
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => {
+                                    setShowDetailsModal(true)
+                                }}>
+                                    <Eye className="mr-2 h-4 w-4" />
+                                    View Details
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     {/* Period Selector */}
                     <Tabs value={selectedPeriod} onValueChange={setSelectedPeriod} className="w-auto">
-                        <TabsList className="grid w-full grid-cols-4">
+                        <TabsList className="grid w-full grid-cols-5">
+                            <TabsTrigger value="1month">1 Month</TabsTrigger>
                             <TabsTrigger value="3months">3 Months</TabsTrigger>
                             <TabsTrigger value="6months">6 Months</TabsTrigger>
                             <TabsTrigger value="12months">12 Months</TabsTrigger>
@@ -605,9 +1332,9 @@ export function FinancialAnalytics() {
                                     <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
                                         <div className="flex items-center gap-3">
                                             <div className={`w-2 h-2 rounded-full ${transaction.transaction_type === 'invoice_payment' ? 'bg-red-500' :
-                                                    transaction.transaction_type === 'expense' ? 'bg-orange-500' :
-                                                        transaction.transaction_type === 'profit_adjustment' ? 'bg-blue-500' :
-                                                            'bg-gray-500'
+                                                transaction.transaction_type === 'expense' ? 'bg-orange-500' :
+                                                    transaction.transaction_type === 'profit_adjustment' ? 'bg-blue-500' :
+                                                        'bg-gray-500'
                                                 }`} />
                                             <div>
                                                 <div className="font-medium">{transaction.description}</div>
@@ -617,8 +1344,8 @@ export function FinancialAnalytics() {
                                             </div>
                                         </div>
                                         <div className={`font-bold ${transaction.transaction_type === 'invoice_payment' ? 'text-red-600' :
-                                                transaction.transaction_type === 'expense' ? 'text-orange-600' :
-                                                    transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                                            transaction.transaction_type === 'expense' ? 'text-orange-600' :
+                                                transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
                                             }`}>
                                             {transaction.transaction_type === 'invoice_payment' || transaction.transaction_type === 'expense' ? '-' : ''}
                                             {formatCurrency(Math.abs(transaction.amount))}
@@ -871,9 +1598,9 @@ export function FinancialAnalytics() {
                                         <div className="flex items-center gap-4">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-3 h-3 rounded-full ${transaction.transaction_type === 'invoice_payment' ? 'bg-red-500' :
-                                                        transaction.transaction_type === 'expense' ? 'bg-orange-500' :
-                                                            transaction.transaction_type === 'profit_adjustment' ? 'bg-blue-500' :
-                                                                'bg-gray-500'
+                                                    transaction.transaction_type === 'expense' ? 'bg-orange-500' :
+                                                        transaction.transaction_type === 'profit_adjustment' ? 'bg-blue-500' :
+                                                            'bg-gray-500'
                                                     }`} />
                                                 <Badge variant="outline" className="text-xs">
                                                     {transaction.transaction_type.replace('_', ' ')}
@@ -888,8 +1615,8 @@ export function FinancialAnalytics() {
                                         </div>
                                         <div className="text-right">
                                             <div className={`font-bold ${transaction.transaction_type === 'invoice_payment' ? 'text-red-600' :
-                                                    transaction.transaction_type === 'expense' ? 'text-orange-600' :
-                                                        transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
+                                                transaction.transaction_type === 'expense' ? 'text-orange-600' :
+                                                    transaction.amount > 0 ? 'text-green-600' : 'text-red-600'
                                                 }`}>
                                                 {transaction.transaction_type === 'invoice_payment' || transaction.transaction_type === 'expense' ? '-' : ''}
                                                 {formatCurrency(Math.abs(transaction.amount))}
