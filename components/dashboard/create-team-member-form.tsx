@@ -105,6 +105,16 @@ export function CreateTeamMemberForm({ onSuccess, onCancel }: CreateTeamMemberFo
         return
       }
 
+      if (!formData.role) {
+        toast({
+          title: "Error",
+          description: "Please select a role.",
+          variant: "destructive",
+        })
+        setIsSubmitting(false)
+        return
+      }
+
       // Prepare client access data
       const clientAccess = Object.entries(selectedClients)
         .filter(([_, selected]) => selected)
@@ -114,9 +124,9 @@ export function CreateTeamMemberForm({ onSuccess, onCancel }: CreateTeamMemberFo
         }))
 
       // Create user
+      console.log('Creating user with data:', { ...formData, clientAccess })
       await createUser({
         ...formData,
-        role,
         clientAccess,
       })
 
@@ -126,9 +136,10 @@ export function CreateTeamMemberForm({ onSuccess, onCancel }: CreateTeamMemberFo
       })
       onSuccess()
     } catch (error) {
+      console.error('Create team member error:', error)
       toast({
         title: "Error",
-        description: "Failed to create team member.",
+        description: error instanceof Error ? error.message : "Failed to create team member.",
         variant: "destructive",
       })
     } finally {
@@ -142,7 +153,20 @@ export function CreateTeamMemberForm({ onSuccess, onCancel }: CreateTeamMemberFo
     return role?.description || ""
   }
 
-  const [role, setRole] = useState(roles[0]?.id || "")
+  console.log('Available roles:', roles)
+  console.log('Form data:', formData)
+  console.log('Available clients:', availableClients)
+
+  if (roles.length === 0) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-muted-foreground">Loading roles...</p>
+        <Button variant="outline" onClick={onCancel} className="mt-4">
+          Cancel
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -188,7 +212,7 @@ export function CreateTeamMemberForm({ onSuccess, onCancel }: CreateTeamMemberFo
           </div>
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={handleRoleChange}>
+            <Select value={formData.role} onValueChange={handleRoleChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a role" />
               </SelectTrigger>

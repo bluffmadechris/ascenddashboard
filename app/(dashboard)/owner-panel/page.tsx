@@ -178,9 +178,16 @@ export default function OwnerPanelPage() {
     return <div>Loading...</div>
   }
 
+  console.log('Owner Panel - Active tab:', activeTab)
+  
   return (
     <div className="container mx-auto py-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Owner Panel</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Owner Panel</h1>
+        <div className="text-sm text-muted-foreground">
+          Current tab: {activeTab}
+        </div>
+      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full grid grid-cols-4 lg:grid-cols-8 gap-1">
@@ -312,6 +319,84 @@ export default function OwnerPanelPage() {
 
         <TabsContent value="strikes" className="mt-6">
           <StrikesManagement />
+        </TabsContent>
+
+        {/* Create Team Member Form */}
+        <TabsContent value="create-member" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Team Member</CardTitle>
+              <CardDescription>
+                Add a new team member to your organization with specific role and client access permissions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CreateTeamMemberForm
+                onSuccess={handleCreateMemberSuccess}
+                onCancel={handleCancelEditMember}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Edit Team Member Form */}
+        <TabsContent value="edit-member" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Edit Team Member</CardTitle>
+              <CardDescription>
+                Update team member information, role, and client access permissions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedMemberId && (
+                <EditTeamMemberForm
+                  memberId={selectedMemberId}
+                  onSuccess={handleUpdateMemberSuccess}
+                  onCancel={handleCancelEditMember}
+                />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Create Role Form */}
+        <TabsContent value="create-role" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Role</CardTitle>
+              <CardDescription>
+                Define a new role with specific permissions for your team members.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CreateRoleForm
+                onSuccess={handleCreateRoleSuccess}
+                onCancel={handleCancelEditRole}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Edit Role Form */}
+        <TabsContent value="edit-role" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Edit Role</CardTitle>
+              <CardDescription>
+                Update role permissions and settings.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {selectedRoleId && (
+                <EditRoleForm
+                  roleId={selectedRoleId}
+                  onSuccess={handleUpdateRoleSuccess}
+                  onCancel={handleCancelEditRole}
+                />
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
