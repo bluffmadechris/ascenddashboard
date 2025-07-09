@@ -4,24 +4,21 @@ import { MeetingRequestsList } from "@/components/dashboard/meeting-requests-lis
 import { Button } from "@/components/ui/button"
 import { AlertCircle, Loader2, Plus } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
-import { ApiClient } from "@/lib/api-client"
+import { apiClient } from "@/lib/api-client"
 import { toast } from "sonner"
 import { checkUsersAvailability } from "@/lib/availability-utils"
 import { addHours } from "date-fns"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-// Initialize API client
-const api = new ApiClient();
-
 export default function MeetingRequestsPage() {
-  const { user, users } = useAuth()
+  const { user, users, isApiConnected, refreshUsers } = useAuth()
   const [showRequestDialog, setShowRequestDialog] = useState(false)
   const [subject, setSubject] = useState("")
   const [description, setDescription] = useState("")
@@ -34,6 +31,35 @@ export default function MeetingRequestsPage() {
 
   // Find the owner/CEO to request meetings from
   const owner = users.find(u => u.role === "owner" || u.role === "ceo")
+
+  // Debug logging
+  console.log('Current user:', user)
+  console.log('All users:', users)
+  console.log('Is owner:', isOwner)
+  console.log('API connected:', isApiConnected)
+
+  const filteredUsers = users.filter(u => {
+    // Don't include current user
+    if (String(u.id) === String(user?.id)) return false;
+
+    // If current user is owner, they can request meetings with anyone except other owners
+    if (isOwner) {
+      return u.role !== "owner";
+    }
+
+    // If current user is employee, they can only request meetings with owners
+    return u.role === "owner";
+  })
+
+  console.log('Filtered users:', filteredUsers)
+
+  // Ensure users are loaded when component mounts
+  useEffect(() => {
+    if (isApiConnected && users.length === 0) {
+      console.log('Refreshing users on mount...')
+      refreshUsers()
+    }
+  }, [isApiConnected, users.length, refreshUsers])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,7 +89,7 @@ export default function MeetingRequestsPage() {
     // Check target user's availability (assuming 1-hour meetings)
     const endDateTime = addHours(selectedDateTime, 1)
     const { available, conflicts } = checkUsersAvailability(
-      [targetId],
+      [String(targetId)],
       selectedDateTime,
       endDateTime,
       users
@@ -77,7 +103,7 @@ export default function MeetingRequestsPage() {
     setIsSubmitting(true)
 
     try {
-      const response = await api.createMeetingRequest({
+      const response = await apiClient.createMeetingRequest({
         target_user_id: targetId,
         proposed_date: selectedDateTime.toISOString(),
         subject: subject.trim(),
@@ -109,6 +135,19 @@ export default function MeetingRequestsPage() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">Meeting Requests</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              console.log('Manual refresh triggered')
+              refreshUsers()
+            }}
+          >
+            Refresh Users ({users.length})
+          </Button>
+        </div>
         {canRequestMeeting && (
           <Dialog open={showRequestDialog} onOpenChange={setShowRequestDialog}>
             <DialogTrigger asChild>
@@ -134,25 +173,56 @@ export default function MeetingRequestsPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4 py-4">
-                {(isOwner || user?.role === "employee") && (
-                  <div className="space-y-2">
-                    <Label htmlFor="targetUser">Select User *</Label>
-                    <Select value={targetUserId} onValueChange={setTargetUserId} required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a user" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users
-                          .filter(u => u.id !== user?.id && (isOwner ? u.role !== "owner" : u.role === "owner"))
-                          .map(u => (
-                            <SelectItem key={u.id} value={String(u.id)}>
-                              {u.name} ({u.role})
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
+                <div className="space-y-2">
+                  <Label htmlFor="targetUser">Select User *</Label>
+                  <div className="text-xs text-muted-foreground mb-2">
+                    Debug: Users loaded: {users.length}, Filtered: {filteredUsers.length}, Role: {user?.role}
                   </div>
-                )}
+                  <Select value={targetUserId} onValueChange={(value) => {
+                    console.log('User selected:', value)
+                    setTargetUserId(value)
+                  }} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredUsers.length > 0 ? (
+                        filteredUsers.map(u => (
+                          <SelectItem key={u.id} value={String(u.id)}>
+                            {u.name} ({u.role})
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div>
+                          <SelectItem disabled value="no-users">
+                            {users.length === 0 ? "Loading users..." : "No users available for meeting requests"}
+                          </SelectItem>
+                          {users.length > 0 && (
+                            <SelectItem disabled value="debug-info">
+                              Debug: Found {users.length} users, your role: {user?.role}
+                            </SelectItem>
+                          )}
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {targetUserId && (
+                    <p className="text-sm text-muted-foreground">
+                      Selected: {users.find(u => String(u.id) === targetUserId)?.name}
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      console.log('Force refresh users...')
+                      refreshUsers()
+                    }}
+                  >
+                    Refresh Users
+                  </Button>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="subject">Meeting Subject *</Label>
                   <Input

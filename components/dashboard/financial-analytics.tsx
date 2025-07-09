@@ -28,7 +28,9 @@ import {
     Download,
     RefreshCw,
     Settings,
-    Eye
+    Eye,
+    Trash2,
+    Edit
 } from "lucide-react"
 import {
     ResponsiveContainer,
@@ -80,6 +82,16 @@ interface Expense {
     created_at: string
 }
 
+interface ProfitStat {
+    id: number
+    amount: number
+    month: string
+    notes?: string
+    created_by_name: string
+    created_at: string
+    updated_at: string
+}
+
 type ChartData = {
     month: string
     value: number
@@ -100,11 +112,15 @@ type FinancialChart = {
 export function FinancialAnalytics() {
     const [analytics, setAnalytics] = useState<FinancialAnalytics | null>(null)
     const [expenses, setExpenses] = useState<Expense[]>([])
+    const [profitStats, setProfitStats] = useState<ProfitStat[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [selectedPeriod, setSelectedPeriod] = useState('12months')
     const [activeChart, setActiveChart] = useState<string>("revenue")
     const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false)
     const [isAddAdjustmentOpen, setIsAddAdjustmentOpen] = useState(false)
+    const [isAddProfitStatOpen, setIsAddProfitStatOpen] = useState(false)
+    const [isEditProfitStatOpen, setIsEditProfitStatOpen] = useState(false)
+    const [editingProfitStat, setEditingProfitStat] = useState<ProfitStat | null>(null)
     const [showDetailsModal, setShowDetailsModal] = useState(false)
     const [showSettingsModal, setShowSettingsModal] = useState(false)
 
@@ -146,6 +162,13 @@ export function FinancialAnalytics() {
         reason: ''
     })
 
+    // Profit stat form state
+    const [profitStatForm, setProfitStatForm] = useState({
+        amount: '',
+        month: new Date().toISOString().split('T')[0].substring(0, 7), // YYYY-MM format
+        notes: ''
+    })
+
     // Fetch financial analytics
     const fetchAnalytics = async () => {
         try {
@@ -175,13 +198,143 @@ export function FinancialAnalytics() {
         }
     }
 
+    // Fetch profit stats
+    const fetchProfitStats = async () => {
+        try {
+            const response = await apiClient.get('/dashboard/profit-stats')
+            if (response.success) {
+                setProfitStats((response.data as any).profit_stats)
+            }
+        } catch (error) {
+            console.error('Error fetching monthly income:', error)
+            toast.error('Failed to fetch monthly income')
+        }
+    }
+
+    // Delete expense
+    const handleDeleteExpense = async (expenseId: number) => {
+        try {
+            const response = await apiClient.delete(`/dashboard/expenses/${expenseId}`)
+            if (response.success) {
+                toast.success('Expense deleted successfully!')
+                // Refresh data after deletion
+                await Promise.all([
+                    fetchAnalytics(),
+                    fetchExpenses()
+                ])
+            } else {
+                toast.error('Failed to delete expense')
+            }
+        } catch (error) {
+            console.error('Error deleting expense:', error)
+            toast.error('Failed to delete expense')
+        }
+    }
+
+    // Add profit stat
+    const handleAddProfitStat = async (e: React.FormEvent) => {
+        e.preventDefault()
+        try {
+            const response = await apiClient.post('/dashboard/profit-stats', {
+                amount: parseFloat(profitStatForm.amount),
+                month: profitStatForm.month + '-01', // Convert YYYY-MM to YYYY-MM-01
+                notes: profitStatForm.notes || null
+            })
+            if (response.success) {
+                toast.success('Monthly income added successfully!')
+                setIsAddProfitStatOpen(false)
+                setProfitStatForm({
+                    amount: '',
+                    month: new Date().toISOString().split('T')[0].substring(0, 7),
+                    notes: ''
+                })
+                // Refresh data
+                await Promise.all([
+                    fetchAnalytics(),
+                    fetchProfitStats()
+                ])
+            } else {
+                toast.error(response.message || 'Failed to add monthly income')
+            }
+        } catch (error) {
+            console.error('Error adding monthly income:', error)
+            toast.error('Failed to add monthly income')
+        }
+    }
+
+    // Edit profit stat
+    const handleEditProfitStat = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!editingProfitStat) return
+
+        try {
+            const response = await apiClient.put(`/dashboard/profit-stats/${editingProfitStat.id}`, {
+                amount: parseFloat(profitStatForm.amount),
+                month: profitStatForm.month + '-01', // Convert YYYY-MM to YYYY-MM-01
+                notes: profitStatForm.notes || null
+            })
+            if (response.success) {
+                toast.success('Monthly income updated successfully!')
+                setIsEditProfitStatOpen(false)
+                setEditingProfitStat(null)
+                setProfitStatForm({
+                    amount: '',
+                    month: new Date().toISOString().split('T')[0].substring(0, 7),
+                    notes: ''
+                })
+                // Refresh data
+                await Promise.all([
+                    fetchAnalytics(),
+                    fetchProfitStats()
+                ])
+            } else {
+                toast.error(response.message || 'Failed to update monthly income')
+            }
+        } catch (error) {
+            console.error('Error updating monthly income:', error)
+            toast.error('Failed to update monthly income')
+        }
+    }
+
+    // Delete profit stat
+    const handleDeleteProfitStat = async (profitStatId: number) => {
+        try {
+            const response = await apiClient.delete(`/dashboard/profit-stats/${profitStatId}`)
+            if (response.success) {
+                toast.success('Monthly income deleted successfully!')
+                // Refresh data
+                await Promise.all([
+                    fetchAnalytics(),
+                    fetchProfitStats()
+                ])
+            } else {
+                toast.error('Failed to delete monthly income')
+            }
+        } catch (error) {
+            console.error('Error deleting monthly income:', error)
+            toast.error('Failed to delete monthly income')
+        }
+    }
+
+    // Open edit profit stat dialog
+    const openEditProfitStat = (profitStat: ProfitStat) => {
+        setEditingProfitStat(profitStat)
+        setProfitStatForm({
+            amount: profitStat.amount.toString(),
+            month: profitStat.month.substring(0, 7), // Convert YYYY-MM-DD to YYYY-MM
+            notes: profitStat.notes || ''
+        })
+        setIsEditProfitStatOpen(true)
+    }
+
     // Refresh all data
     const refreshData = async () => {
         try {
             toast.info('Refreshing financial data...')
             await Promise.all([
                 fetchAnalytics(),
-                fetchExpenses()
+                fetchExpenses(),
+                fetchProfitStats()
             ])
             toast.success('Financial data refreshed successfully!')
         } catch (error) {
@@ -194,7 +347,7 @@ export function FinancialAnalytics() {
         try {
             console.log('Starting PDF generation...')
             console.log('Analytics data:', analytics)
-            
+
             if (!analytics) {
                 toast.error('No analytics data available for report generation')
                 return
@@ -369,6 +522,7 @@ export function FinancialAnalytics() {
     useEffect(() => {
         fetchAnalytics()
         fetchExpenses()
+        fetchProfitStats()
     }, [selectedPeriod])
 
     // Handle add expense
@@ -1462,8 +1616,22 @@ export function FinancialAnalytics() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="font-bold text-red-600">
-                                            {formatCurrency(expense.amount)}
+                                        <div className="flex items-center gap-3">
+                                            <div className="font-bold text-red-600">
+                                                {formatCurrency(expense.amount)}
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    if (window.confirm('Are you sure you want to delete this expense?')) {
+                                                        handleDeleteExpense(expense.id)
+                                                    }
+                                                }}
+                                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
@@ -1483,21 +1651,21 @@ export function FinancialAnalytics() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Target className="h-5 w-5" />
-                                Profit Balance Breakdown
+                                Financial Summary
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium">Profit Added (Manual)</span>
+                                    <span className="text-sm font-medium">Invoice Revenue</span>
                                     <span className="font-bold text-green-600">
-                                        +{formatCurrency(analytics.summary.totalProfitAdded)}
+                                        +{formatCurrency(analytics.summary.totalRevenue)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium">Invoice Payments</span>
-                                    <span className="font-bold text-red-600">
-                                        -{formatCurrency(analytics.summary.totalRevenue)}
+                                    <span className="text-sm font-medium">Monthly Profit</span>
+                                    <span className="font-bold text-green-600">
+                                        +{formatCurrency(analytics.summary.totalProfitAdded)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between items-center">
@@ -1508,7 +1676,7 @@ export function FinancialAnalytics() {
                                 </div>
                                 <div className="border-t pt-4">
                                     <div className="flex justify-between items-center">
-                                        <span className="font-medium">Net Profit Balance</span>
+                                        <span className="font-medium">Net Profit</span>
                                         <span className={`text-xl font-bold ${analytics.summary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                             {formatCurrency(analytics.summary.netProfit)}
                                         </span>
@@ -1518,59 +1686,56 @@ export function FinancialAnalytics() {
                         </CardContent>
                     </Card>
 
-                    {/* Add Profit Adjustment */}
+                    {/* Monthly Profit Management */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center justify-between">
-                                <span>Profit Adjustments</span>
-                                <Dialog open={isAddAdjustmentOpen} onOpenChange={setIsAddAdjustmentOpen}>
+                                <span>Monthly Income Management</span>
+                                <Dialog open={isAddProfitStatOpen} onOpenChange={setIsAddProfitStatOpen}>
                                     <DialogTrigger asChild>
-                                        <Button variant="outline">
+                                        <Button>
                                             <Plus className="h-4 w-4 mr-2" />
-                                            Add Adjustment
+                                            Add Monthly Income
                                         </Button>
                                     </DialogTrigger>
                                     <DialogContent>
                                         <DialogHeader>
-                                            <DialogTitle>Add Profit Adjustment</DialogTitle>
+                                            <DialogTitle>Add Monthly Income</DialogTitle>
                                         </DialogHeader>
-                                        <form onSubmit={handleAddAdjustment} className="space-y-4">
+                                        <form onSubmit={handleAddProfitStat} className="space-y-4">
                                             <div className="space-y-2">
-                                                <Label htmlFor="adjustment_type">Type</Label>
-                                                <Select value={adjustmentForm.adjustment_type} onValueChange={(value) => setAdjustmentForm({ ...adjustmentForm, adjustment_type: value })}>
-                                                    <SelectTrigger>
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="add">Add to Profit</SelectItem>
-                                                        <SelectItem value="subtract">Subtract from Profit</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="adjustment_amount">Amount</Label>
+                                                <Label htmlFor="profit_amount">Amount</Label>
                                                 <Input
-                                                    id="adjustment_amount"
+                                                    id="profit_amount"
                                                     type="number"
                                                     step="0.01"
-                                                    value={adjustmentForm.amount}
-                                                    onChange={(e) => setAdjustmentForm({ ...adjustmentForm, amount: e.target.value })}
+                                                    value={profitStatForm.amount}
+                                                    onChange={(e) => setProfitStatForm({ ...profitStatForm, amount: e.target.value })}
                                                     placeholder="0.00"
                                                     required
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor="reason">Reason</Label>
-                                                <Textarea
-                                                    id="reason"
-                                                    value={adjustmentForm.reason}
-                                                    onChange={(e) => setAdjustmentForm({ ...adjustmentForm, reason: e.target.value })}
-                                                    placeholder="Explain the reason for this adjustment..."
+                                                <Label htmlFor="profit_month">Month</Label>
+                                                <Input
+                                                    id="profit_month"
+                                                    type="month"
+                                                    value={profitStatForm.month}
+                                                    onChange={(e) => setProfitStatForm({ ...profitStatForm, month: e.target.value })}
                                                     required
                                                 />
                                             </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="profit_notes">Notes (optional)</Label>
+                                                <Textarea
+                                                    id="profit_notes"
+                                                    value={profitStatForm.notes}
+                                                    onChange={(e) => setProfitStatForm({ ...profitStatForm, notes: e.target.value })}
+                                                    placeholder="Optional notes about this profit entry..."
+                                                />
+                                            </div>
                                             <Button type="submit" className="w-full">
-                                                Add Adjustment
+                                                Add Monthly Income
                                             </Button>
                                         </form>
                                     </DialogContent>
@@ -1579,11 +1744,108 @@ export function FinancialAnalytics() {
                         </CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground mb-4">
-                                Use profit adjustments to manually add or subtract from your profit balance.
-                                This is useful for one-time payments, corrections, or other financial adjustments.
+                                Track additional monthly income beyond invoices. This could include retainers, bonuses, or other income sources.
                             </p>
+
+                            <div className="space-y-3">
+                                {profitStats.map((profitStat) => (
+                                    <div key={profitStat.id} className="flex items-center justify-between p-3 border rounded-lg">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full bg-green-500" />
+                                            <div>
+                                                <div className="font-medium">
+                                                    {format(new Date(profitStat.month), 'MMMM yyyy')}
+                                                </div>
+                                                <div className="text-sm text-muted-foreground">
+                                                    {profitStat.notes && (
+                                                        <span>{profitStat.notes} • </span>
+                                                    )}
+                                                    Added by {profitStat.created_by_name}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <div className="font-bold text-green-600">
+                                                {formatCurrency(profitStat.amount)}
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => openEditProfitStat(profitStat)}
+                                                    className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                >
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        if (window.confirm('Are you sure you want to delete this income entry?')) {
+                                                            handleDeleteProfitStat(profitStat.id)
+                                                        }
+                                                    }}
+                                                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {profitStats.length === 0 && (
+                                    <p className="text-center text-muted-foreground py-8">
+                                        No monthly income entries yet. Add your first income entry to track additional monthly earnings.
+                                    </p>
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
+
+                    {/* Edit Monthly Profit Dialog */}
+                    <Dialog open={isEditProfitStatOpen} onOpenChange={setIsEditProfitStatOpen}>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Edit Monthly Income</DialogTitle>
+                            </DialogHeader>
+                            <form onSubmit={handleEditProfitStat} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit_profit_amount">Amount</Label>
+                                    <Input
+                                        id="edit_profit_amount"
+                                        type="number"
+                                        step="0.01"
+                                        value={profitStatForm.amount}
+                                        onChange={(e) => setProfitStatForm({ ...profitStatForm, amount: e.target.value })}
+                                        placeholder="0.00"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit_profit_month">Month</Label>
+                                    <Input
+                                        id="edit_profit_month"
+                                        type="month"
+                                        value={profitStatForm.month}
+                                        onChange={(e) => setProfitStatForm({ ...profitStatForm, month: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="edit_profit_notes">Notes (optional)</Label>
+                                    <Textarea
+                                        id="edit_profit_notes"
+                                        value={profitStatForm.notes}
+                                        onChange={(e) => setProfitStatForm({ ...profitStatForm, notes: e.target.value })}
+                                        placeholder="Optional notes about this profit entry..."
+                                    />
+                                </div>
+                                <Button type="submit" className="w-full">
+                                    Update Monthly Income
+                                </Button>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
                 </TabsContent>
 
                 <TabsContent value="transactions" className="space-y-6">
