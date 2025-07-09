@@ -268,34 +268,7 @@ export function TeamMemberDetails({ open, onOpenChange, member, clients, strikes
                                         </Card>
                                     </div>
 
-                                    {/* Avatar URL */}
-                                    {member.avatar && (
-                                        <Card>
-                                            <CardContent className="pt-6">
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <span className="font-medium">Avatar URL</span>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <Avatar className="h-16 w-16">
-                                                        <AvatarImage
-                                                            src={member.avatar}
-                                                            alt={member.name}
-                                                            className="object-cover"
-                                                        />
-                                                        <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                                                    </Avatar>
-                                                    <a
-                                                        href={member.avatar}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-sm text-primary hover:underline break-all"
-                                                    >
-                                                        {member.avatar}
-                                                    </a>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    )}
+
 
                                     {/* Bio */}
                                     {member.bio && (

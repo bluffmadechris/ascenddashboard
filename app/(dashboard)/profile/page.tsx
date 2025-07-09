@@ -213,21 +213,19 @@ export default function ProfilePage() {
       setAvatar(newAvatar)
       if (!isEditing) {
         const success = await updateProfile(String(user.id), {
-          name: user.name,
-          avatar: newAvatar,
-          phone: user.phone,
-          title: user.title,
-          department: user.department,
-          role: user.role,
-          bio: user.bio,
-          email: user.email,
-          socialMedia: user.socialMedia
+          avatar: newAvatar
         })
 
         if (success) {
           toast({
             title: "Profile picture updated",
             description: "Your profile picture has been updated successfully.",
+          })
+        } else {
+          toast({
+            title: "Update failed",
+            description: "Failed to update profile picture.",
+            variant: "destructive",
           })
         }
       }

@@ -136,6 +136,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isApiConnected, user])
 
+  // Refresh users when window regains focus to ensure fresh data
+  useEffect(() => {
+    const handleFocus = () => {
+      if (isApiConnected && user) {
+        refreshUsers()
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [isApiConnected, user])
+
   // Ensure users are refreshed before rendering meeting forms
   useEffect(() => {
     if (isApiConnected) {

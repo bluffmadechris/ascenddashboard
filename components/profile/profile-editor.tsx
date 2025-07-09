@@ -121,8 +121,8 @@ export function ProfileEditor() {
       </div>
 
       <AvatarUpload
-        currentUrl={user?.avatar}
-        onUpload={async (url) => {
+        currentAvatar={user?.avatar || ""}
+        onAvatarChange={async (url) => {
           try {
             const response = await api.updateUser(user?.id, { avatar: url })
             if (response.success) {
@@ -142,6 +142,7 @@ export function ProfileEditor() {
             })
           }
         }}
+        name={user?.name || "User"}
         disabled={!isEditing}
       />
 

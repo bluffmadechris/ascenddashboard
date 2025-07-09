@@ -22,13 +22,18 @@ import { OrgChart } from "@/components/org-chart/org-chart"
 import { OrgChartGrid } from "@/components/org-chart/org-chart-grid"
 
 export default function TeamPage() {
-  const { users } = useAuth()
+  const { users, refreshUsers } = useAuth()
   const { getDisplayTitle } = useDisplayTitle()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedView, setSelectedView] = useState<"list" | "org">("org")
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [visibilityStates, setVisibilityStates] = useState<Record<string, boolean>>({})
   const [filterRole, setFilterRole] = useState<string | null>(null)
+
+  // Refresh users when component mounts to ensure fresh data
+  useEffect(() => {
+    refreshUsers()
+  }, [])
 
   // Load visibility states from local storage
   useEffect(() => {
@@ -207,6 +212,13 @@ export default function TeamPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Team</h1>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => refreshUsers()}
+            size="sm"
+          >
+            Refresh
+          </Button>
           <Button
             variant={selectedView === "list" ? "default" : "outline"}
             onClick={() => setSelectedView("list")}

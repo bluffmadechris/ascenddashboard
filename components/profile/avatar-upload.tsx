@@ -18,10 +18,12 @@ export function AvatarUpload({
   currentAvatar,
   onAvatarChange,
   name = "User Name",
+  disabled = false,
 }: {
   currentAvatar: string
   onAvatarChange: (url: string) => void
   name?: string
+  disabled?: boolean
 }) {
   const [isHovering, setIsHovering] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -62,22 +64,36 @@ export function AvatarUpload({
       const formData = new FormData()
       formData.append('avatar', file)
 
-      // Upload to the backend
+      // Get auth token
+      const authToken = localStorage.getItem('auth_token')
+
+      if (!authToken) {
+        throw new Error('Authentication token not found')
+      }
+
+      // Upload to the backend using the API client's base URL
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}/users/${user.id}/avatar`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+          'Authorization': `Bearer ${authToken}`,
         },
         body: formData,
       })
 
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `Upload failed: ${response.status}`)
+      }
+
       const result = await response.json()
 
-      if (!response.ok || !result.success) {
+      if (!result.success) {
         throw new Error(result.message || 'Failed to upload avatar')
       }
 
-      onAvatarChange(result.data.avatar_url || result.data.signed_url)
+      // Use the signed URL for immediate display, fallback to regular URL
+      const newAvatarUrl = result.data.signed_url || result.data.avatar_url
+      onAvatarChange(newAvatarUrl)
       setIsDialogOpen(false)
       toast({
         title: 'Success',
@@ -85,11 +101,28 @@ export function AvatarUpload({
       })
     } catch (error) {
       console.error('Avatar upload error:', error)
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to upload profile picture',
-        variant: 'destructive',
-      })
+
+      // Check if it's an AWS configuration error
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload profile picture'
+
+      if (error instanceof Error && (error.message?.includes('AWS S3 configuration') || error.message?.includes('File upload is currently unavailable'))) {
+        toast({
+          title: 'File Upload Unavailable',
+          description: 'File upload is currently unavailable. Please use the "Use URL" tab to set your profile picture with an image URL.',
+          variant: 'destructive',
+        })
+        // Automatically switch to URL tab
+        const urlTab = document.querySelector('[data-value="url"]') as HTMLElement
+        if (urlTab) {
+          urlTab.click()
+        }
+      } else {
+        toast({
+          title: 'Upload Failed',
+          description: errorMessage,
+          variant: 'destructive',
+        })
+      }
     } finally {
       setIsUploading(false)
       // Clear the file input
@@ -169,19 +202,16 @@ export function AvatarUpload({
         )
       }
 
-      // Send all required fields to avoid 400 Bad Request
+      // Update the avatar URL using the API client
       const response = await apiClient.updateUser(user.id, {
-        name: user.name,
-        avatar: url,
-        phone: user.phone,
-        title: user.title,
-        department: user.department,
-        role: user.role
+        avatar: url
       })
+
       if (!response.success) {
         throw new Error(response.message || 'Failed to update profile picture')
       }
 
+      // Update the global user state and local state
       onAvatarChange(url)
       setIsDialogOpen(false)
       setUrlInput("")
@@ -250,7 +280,7 @@ export function AvatarUpload({
           <button
             type="button"
             className={`absolute inset-0 flex items-center justify-center rounded-full bg-black/50 text-white transition-opacity ${isHovering || isUploading ? 'opacity-100' : 'opacity-0'}`}
-            disabled={isUploading}
+            disabled={isUploading || disabled}
           >
             {isUploading ? (
               <Loader2 className="h-6 w-6 animate-spin" />
@@ -281,11 +311,16 @@ export function AvatarUpload({
                   type="file"
                   accept="image/*"
                   onChange={handleFileUpload}
-                  disabled={isUploading}
+                  disabled={isUploading || disabled}
                 />
                 <p className="text-xs text-muted-foreground">
                   Supports JPG, PNG, GIF up to 5MB
                 </p>
+                {process.env.NODE_ENV === 'development' && (
+                  <p className="text-xs text-yellow-600">
+                    Debug: Using API URL {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}
+                  </p>
+                )}
               </div>
             </TabsContent>
 
@@ -297,16 +332,21 @@ export function AvatarUpload({
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
                   placeholder="https://example.com/image.jpg"
-                  disabled={isUploading}
+                  disabled={isUploading || disabled}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Try: picsum.photos/400/400 or placehold.co/400x400.png
+                  Try: <code className="bg-muted px-1 rounded">https://picsum.photos/400/400</code> or <code className="bg-muted px-1 rounded">https://placehold.co/400x400.png</code>
                 </p>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>• Direct image links (ending in .jpg, .png, .gif, .webp)</p>
+                  <p>• Placeholder services: picsum.photos, placehold.co</p>
+                  <p>• Avoid stock photo sites (they block direct links)</p>
+                </div>
               </div>
 
               <Button
                 onClick={handleUrlUpload}
-                disabled={isUploading || !urlInput.trim()}
+                disabled={isUploading || !urlInput.trim() || disabled}
                 className="w-full"
               >
                 {isUploading ? (
