@@ -37,6 +37,15 @@ export interface User {
   phone?: string;
   title?: string;
   department?: string;
+  bio?: string;
+  socialMedia?: {
+    twitter?: string;
+    linkedin?: string;
+    instagram?: string;
+    facebook?: string;
+    youtube?: string;
+    customLinks?: Array<{ title: string; url: string; }>;
+  };
   created_at: string;
   updated_at: string;
 }
@@ -204,7 +213,21 @@ class ApiClient {
   }
   
   async getCurrentUser(): Promise<ApiResponse<{ user: User }>> {
-    return this.get<{ user: User }>('/auth/me');
+    const response = await this.get<{ user: User }>('/auth/me');
+    
+    // Map API response fields to frontend fields
+    if (response.success && response.data?.user) {
+      if ('avatar_url' in response.data.user) {
+        response.data.user.avatar = response.data.user.avatar_url;
+        delete response.data.user.avatar_url;
+      }
+      if ('social_links' in response.data.user) {
+        response.data.user.socialMedia = response.data.user.social_links;
+        delete response.data.user.social_links;
+      }
+    }
+    
+    return response;
   }
   
   async changePassword(
@@ -219,11 +242,42 @@ class ApiClient {
   
   // User management methods
   async getUsers(): Promise<ApiResponse<{ users: User[]; total: number }>> {
-    return this.get<{ users: User[]; total: number }>('/users');
+    const response = await this.get<{ users: User[]; total: number }>('/users');
+    
+    // Map API response fields to frontend fields
+    if (response.success && response.data?.users) {
+      response.data.users = response.data.users.map(user => {
+        if ('avatar_url' in user) {
+          user.avatar = user.avatar_url;
+          delete user.avatar_url;
+        }
+        if ('social_links' in user) {
+          user.socialMedia = user.social_links;
+          delete user.social_links;
+        }
+        return user;
+      });
+    }
+    
+    return response;
   }
   
   async getUser(id: number): Promise<ApiResponse<{ user: User }>> {
-    return this.get<{ user: User }>(`/users/${id}`);
+    const response = await this.get<{ user: User }>(`/users/${id}`);
+    
+    // Map API response fields to frontend fields
+    if (response.success && response.data?.user) {
+      if ('avatar_url' in response.data.user) {
+        response.data.user.avatar = response.data.user.avatar_url;
+        delete response.data.user.avatar_url;
+      }
+      if ('social_links' in response.data.user) {
+        response.data.user.socialMedia = response.data.user.social_links;
+        delete response.data.user.social_links;
+      }
+    }
+    
+    return response;
   }
   
   async createUser(userData: {
@@ -242,68 +296,59 @@ class ApiClient {
     id: number,
     updates: Partial<User>
   ): Promise<ApiResponse<{ user: User }>> {
-    // Check if this is a profile update (bio, socialMedia, avatar)
-    const isProfileUpdate = 'bio' in updates || 'socialMedia' in updates || 'avatar' in updates;
-    
-    if (isProfileUpdate) {
-      // Use the profile-specific endpoint
-      const profileUpdates = {
-        bio: updates.bio,
-        avatarUrl: updates.avatar,
-        socialLinks: updates.socialMedia,
-        phone: updates.phone,
-        contactVisible: updates.contactVisible,
-      };
-      
-      // Remove undefined fields
-      Object.keys(profileUpdates).forEach(key => {
-        if (profileUpdates[key as keyof typeof profileUpdates] === undefined) {
-          delete profileUpdates[key as keyof typeof profileUpdates];
-        }
-      });
-      
-      const response = await this.put<User>(`/users/${id}/profile`, profileUpdates);
-      
-      // Map the response to the expected format
-      if (response.success && response.data) {
-        return {
-          success: true,
-          message: response.message,
-          data: { user: response.data }
-        };
-      }
-      
-      return response as ApiResponse<{ user: User }>;
-    } else {
-      // Use the regular user update endpoint for other fields
-      const apiUpdates = { ...updates };
-      
-      // Map avatar to avatar_url for API compatibility
-      if ('avatar' in apiUpdates) {
-        apiUpdates.avatar_url = apiUpdates.avatar as string;
-        delete apiUpdates.avatar;
-      }
-      
-      // Remove fields that don't exist in the API
-      const fieldsToRemove = ['clientAccess', 'password', 'socialMedia', 'bio'];
-      fieldsToRemove.forEach(field => {
-        if (field in apiUpdates) {
-          delete apiUpdates[field as keyof typeof apiUpdates];
-        }
-      });
-      
-      const response = await this.put<{ user: User }>(`/users/${id}`, apiUpdates);
-      
-      // Map API response field names back to frontend field names
-      if (response.success && response.data?.user) {
-        const user = response.data.user;
-        if ('avatar_url' in user) {
-          user.avatar = user.avatar_url as string;
-        }
-      }
-      
-      return response;
+    // Map frontend fields to API fields
+    const apiUpdates = { ...updates };
+    if ('avatar' in apiUpdates) {
+      apiUpdates.avatar_url = apiUpdates.avatar as string;
+      delete apiUpdates.avatar;
     }
+    if ('socialMedia' in apiUpdates) {
+      // Clean up social media data before sending
+      const socialMedia = apiUpdates.socialMedia;
+      if (socialMedia && typeof socialMedia === 'object') {
+        const cleanSocialMedia = {};
+        
+        // Handle the correct format - socialMedia should be an object with platform keys
+        Object.entries(socialMedia).forEach(([key, value]) => {
+          if (value && typeof value === 'string' && value.trim()) {
+            cleanSocialMedia[key] = value.trim();
+          } else if (key === 'customLinks' && Array.isArray(value)) {
+            const validLinks = value.filter(link => link.title && link.url);
+            if (validLinks.length > 0) {
+              cleanSocialMedia.customLinks = validLinks;
+            }
+          }
+        });
+
+        // Only set social_links if we have valid links
+        if (Object.keys(cleanSocialMedia).length > 0) {
+          apiUpdates.social_links = cleanSocialMedia;
+        } else {
+          apiUpdates.social_links = null;
+        }
+      } else {
+        apiUpdates.social_links = null;
+      }
+      delete apiUpdates.socialMedia;
+    }
+
+    console.log('Sending API updates:', apiUpdates); // Debug log
+
+    const response = await this.put<{ user: User }>(`/users/${id}`, apiUpdates);
+
+    // Map API response fields back to frontend fields
+    if (response.success && response.data?.user) {
+      if ('avatar_url' in response.data.user) {
+        response.data.user.avatar = response.data.user.avatar_url;
+        delete response.data.user.avatar_url;
+      }
+      if ('social_links' in response.data.user) {
+        response.data.user.socialMedia = response.data.user.social_links;
+        delete response.data.user.social_links;
+      }
+    }
+
+    return response;
   }
   
   async deleteUser(id: number): Promise<ApiResponse> {

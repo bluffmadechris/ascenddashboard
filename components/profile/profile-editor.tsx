@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -20,9 +20,14 @@ type ProfileData = {
   phone: string
   avatar: string
   bio: string
-  twitter?: string
-  linkedin?: string
-  instagram?: string
+  socialMedia?: {
+    twitter?: string
+    linkedin?: string
+    instagram?: string
+    facebook?: string
+    youtube?: string
+    customLinks?: Array<{ title: string; url: string; }>
+  }
   contactVisible: boolean
 }
 
@@ -30,21 +35,79 @@ export function ProfileEditor() {
   const { user, updateUser } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState<ProfileData>({
-    bio: user?.bio || "",
-    email: user?.email || "",
-    phone: user?.phone || "",
-    contactVisible: user?.contactVisible || false
+    name: "",
+    email: "",
+    phone: "",
+    avatar: "",
+    bio: "",
+    socialMedia: {},
+    contactVisible: false
   })
+
+  // Update form data when user data changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        avatar: user.avatar || "",
+        bio: user.bio || "",
+        socialMedia: user.socialMedia || {},
+        contactVisible: user.contactVisible || false
+      })
+    }
+  }, [user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const response = await api.put(`/users/${user?.id}/profile`, formData)
-      updateUser(response.data)
-      setIsEditing(false)
-      toast.success("Profile updated successfully")
+      // Create a copy of the form data
+      const updates = { ...formData }
+
+      console.log('Original form data:', formData); // Debug log
+
+      // Only include non-empty social media links
+      if (updates.socialMedia) {
+        const cleanSocialMedia: ProfileData['socialMedia'] = {}
+        Object.entries(updates.socialMedia).forEach(([key, value]) => {
+          if (value && typeof value === 'string' && value.trim()) {
+            cleanSocialMedia[key as keyof typeof cleanSocialMedia] = value.trim()
+          } else if (key === 'customLinks' && Array.isArray(value)) {
+            const validCustomLinks = value.filter(link => link.title && link.url)
+            if (validCustomLinks.length > 0) {
+              cleanSocialMedia.customLinks = validCustomLinks
+            }
+          }
+        })
+        updates.socialMedia = Object.keys(cleanSocialMedia).length > 0 ? cleanSocialMedia : undefined
+      }
+
+      // Ensure bio is included in updates
+      if (updates.bio === "") {
+        updates.bio = null
+      }
+
+      console.log('Updates being sent:', updates); // Debug log
+
+      const response = await api.updateUser(user?.id, updates)
+      if (response.success) {
+        updateUser(response.data.user)
+        setIsEditing(false)
+        toast({
+          title: "Success",
+          description: "Profile updated successfully"
+        })
+      } else {
+        throw new Error(response.message)
+      }
     } catch (error) {
-      toast.error("Failed to update profile")
+      console.error('Profile update error:', error); // Debug log
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update profile",
+        variant: "destructive"
+      })
     }
   }
 
@@ -58,14 +121,25 @@ export function ProfileEditor() {
       </div>
 
       <AvatarUpload
-        currentUrl={user?.avatarUrl}
+        currentUrl={user?.avatar}
         onUpload={async (url) => {
           try {
-            await api.put(`/users/${user?.id}/avatar`, { avatarUrl: url })
-            updateUser({ ...user, avatarUrl: url })
-            toast.success("Profile picture updated")
+            const response = await api.updateUser(user?.id, { avatar: url })
+            if (response.success) {
+              updateUser(response.data.user)
+              toast({
+                title: "Success",
+                description: "Profile picture updated"
+              })
+            } else {
+              throw new Error(response.message)
+            }
           } catch (error) {
-            toast.error("Failed to update profile picture")
+            toast({
+              title: "Error",
+              description: error instanceof Error ? error.message : "Failed to update profile picture",
+              variant: "destructive"
+            })
           }
         }}
         disabled={!isEditing}
@@ -113,7 +187,14 @@ export function ProfileEditor() {
           <label htmlFor="contactVisible">Make contact information visible</label>
         </div>
 
-        <SocialMediaEditor disabled={!isEditing} />
+        <div>
+          <label className="block text-sm font-medium mb-1">Social Media</label>
+          <SocialMediaEditor
+            socialLinks={formData.socialMedia || {}}
+            onSave={(links) => setFormData(prev => ({ ...prev, socialMedia: links }))}
+            disabled={!isEditing}
+          />
+        </div>
 
         {isEditing && (
           <Button type="submit" className="w-full">

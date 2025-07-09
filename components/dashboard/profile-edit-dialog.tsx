@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/lib/auth-context"
 import { AvatarUpload } from "@/components/profile/avatar-upload"
-import { Linkedin, Twitter, Youtube, Twitch, Instagram, Github, Globe, Plus, Trash2 } from "lucide-react"
+import { Linkedin, Twitter, Youtube, Instagram, Facebook, Globe, Plus, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ProfileEditDialogProps {
@@ -23,42 +23,45 @@ interface SocialLink {
   username: string
 }
 
+interface SocialMediaLinks {
+  twitter?: string
+  linkedin?: string
+  instagram?: string
+  facebook?: string
+  youtube?: string
+  customLinks?: Array<{ title: string; url: string; }>
+}
+
 // Social media platform configurations
 const socialPlatforms = {
   linkedin: {
     name: "LinkedIn",
     icon: Linkedin,
-    prefix: "linkedin.com/in/",
+    prefix: "https://linkedin.com/in/",
     placeholder: "username",
   },
   twitter: {
     name: "Twitter",
     icon: Twitter,
-    prefix: "twitter.com/",
+    prefix: "https://twitter.com/",
     placeholder: "username",
   },
   youtube: {
     name: "YouTube",
     icon: Youtube,
-    prefix: "youtube.com/@",
+    prefix: "https://youtube.com/@",
     placeholder: "channel",
-  },
-  twitch: {
-    name: "Twitch",
-    icon: Twitch,
-    prefix: "twitch.tv/",
-    placeholder: "username",
   },
   instagram: {
     name: "Instagram",
     icon: Instagram,
-    prefix: "instagram.com/",
+    prefix: "https://instagram.com/",
     placeholder: "username",
   },
-  github: {
-    name: "GitHub",
-    icon: Github,
-    prefix: "github.com/",
+  facebook: {
+    name: "Facebook",
+    icon: Facebook,
+    prefix: "https://facebook.com/",
     placeholder: "username",
   },
   website: {
@@ -90,12 +93,28 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
       setBio(user.bio || "")
       setAvatar(user.avatar || "")
 
-      // Load social links if they exist, otherwise initialize with empty array
-      if (user.socialLinks && Array.isArray(user.socialLinks)) {
-        setSocialLinks(user.socialLinks)
-      } else {
-        setSocialLinks([])
+      // Convert socialMedia object to socialLinks array for editing
+      const links: SocialLink[] = []
+      if (user.socialMedia) {
+        Object.entries(user.socialMedia).forEach(([platform, value]) => {
+          if (platform === 'customLinks' && Array.isArray(value)) {
+            value.forEach((link) => {
+              links.push({
+                id: crypto.randomUUID(),
+                platform: 'website',
+                username: link.url,
+              })
+            })
+          } else if (value && typeof value === 'string') {
+            links.push({
+              id: crypto.randomUUID(),
+              platform: platform,
+              username: value,
+            })
+          }
+        })
       }
+      setSocialLinks(links)
     }
   }, [user, open])
 
@@ -103,13 +122,34 @@ export function ProfileEditDialog({ open, onOpenChange }: ProfileEditDialogProps
     setIsLoading(true)
 
     try {
+      // Convert socialLinks array back to socialMedia object
+      const socialMedia: SocialMediaLinks = {}
+      const customLinks: Array<{ title: string; url: string; }> = []
+
+      socialLinks.forEach((link) => {
+        if (link.username.trim()) {
+          if (link.platform === 'website') {
+            customLinks.push({
+              title: 'Website',
+              url: link.username,
+            })
+          } else {
+            socialMedia[link.platform as keyof Omit<SocialMediaLinks, 'customLinks'>] = link.username
+          }
+        }
+      })
+
+      if (customLinks.length > 0) {
+        socialMedia.customLinks = customLinks
+      }
+
       // Update user profile
       const fullName = `${firstName} ${lastName}`.trim()
       const success = await updateProfile(user?.id || "", {
         name: fullName,
         bio: bio,
         avatar: avatar,
-        socialLinks: socialLinks,
+        socialMedia: socialMedia,
       })
 
       if (success) {

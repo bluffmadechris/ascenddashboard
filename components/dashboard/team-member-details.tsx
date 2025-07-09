@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { format } from "date-fns"
-import { AlertCircle, Mail, Globe, Twitter, Instagram, Youtube, Clock, AlertTriangle, Shield, FileText, Plus } from "lucide-react"
+import { AlertCircle, Mail, Globe, Twitter, Instagram, Youtube, Clock, AlertTriangle, Shield, FileText, Plus, Linkedin, Facebook, LinkIcon } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -17,6 +17,7 @@ import { addStrike, type Strike, createStrikeAppeal, canAppealStrike, getAppeals
 import { useToast } from "@/components/ui/use-toast"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 interface TeamMemberDetailsProps {
     open: boolean
@@ -186,18 +187,122 @@ export function TeamMemberDetails({ open, onOpenChange, member, clients, strikes
                                                     <Mail className="h-4 w-4 text-muted-foreground" />
                                                     <span className="font-medium">Contact</span>
                                                 </div>
-                                                <a href={`mailto:${member.email}`} className="text-sm text-primary hover:underline">
-                                                    {member.email}
-                                                </a>
+                                                <div className="space-y-3">
+                                                    <a href={`mailto:${member.email}`} className="text-sm text-primary hover:underline flex items-center gap-2">
+                                                        <Mail className="h-4 w-4" />
+                                                        {member.email}
+                                                    </a>
+                                                    {member.socialMedia && (
+                                                        <div className="space-y-2">
+                                                            {member.socialMedia.twitter && (
+                                                                <a
+                                                                    href={member.socialMedia.twitter}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                                                                >
+                                                                    <Twitter className="h-4 w-4" />
+                                                                    Twitter
+                                                                </a>
+                                                            )}
+                                                            {member.socialMedia.linkedin && (
+                                                                <a
+                                                                    href={member.socialMedia.linkedin}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                                                                >
+                                                                    <Linkedin className="h-4 w-4" />
+                                                                    LinkedIn
+                                                                </a>
+                                                            )}
+                                                            {member.socialMedia.instagram && (
+                                                                <a
+                                                                    href={member.socialMedia.instagram}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                                                                >
+                                                                    <Instagram className="h-4 w-4" />
+                                                                    Instagram
+                                                                </a>
+                                                            )}
+                                                            {member.socialMedia.facebook && (
+                                                                <a
+                                                                    href={member.socialMedia.facebook}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                                                                >
+                                                                    <Facebook className="h-4 w-4" />
+                                                                    Facebook
+                                                                </a>
+                                                            )}
+                                                            {member.socialMedia.youtube && (
+                                                                <a
+                                                                    href={member.socialMedia.youtube}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                                                                >
+                                                                    <Youtube className="h-4 w-4" />
+                                                                    YouTube
+                                                                </a>
+                                                            )}
+                                                            {member.socialMedia.customLinks?.map((link: { title: string; url: string }, index: number) => (
+                                                                <a
+                                                                    key={index}
+                                                                    href={link.url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
+                                                                >
+                                                                    <LinkIcon className="h-4 w-4" />
+                                                                    {link.title}
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </CardContent>
                                         </Card>
                                     </div>
+
+                                    {/* Avatar URL */}
+                                    {member.avatar && (
+                                        <Card>
+                                            <CardContent className="pt-6">
+                                                <div className="flex items-center gap-2 mb-4">
+                                                    <span className="font-medium">Avatar URL</span>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <Avatar className="h-16 w-16">
+                                                        <AvatarImage
+                                                            src={member.avatar}
+                                                            alt={member.name}
+                                                            className="object-cover"
+                                                        />
+                                                        <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <a
+                                                        href={member.avatar}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-sm text-primary hover:underline break-all"
+                                                    >
+                                                        {member.avatar}
+                                                    </a>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    )}
 
                                     {/* Bio */}
                                     {member.bio && (
                                         <Card>
                                             <CardContent className="pt-6">
                                                 <div className="flex items-center gap-2 mb-4">
+                                                    <FileText className="h-4 w-4 text-muted-foreground" />
                                                     <span className="font-medium">About</span>
                                                 </div>
                                                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{member.bio}</p>
@@ -219,61 +324,6 @@ export function TeamMemberDetails({ open, onOpenChange, member, clients, strikes
                                                             {client.name}
                                                         </div>
                                                     ))}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    )}
-
-                                    {/* Social Media */}
-                                    {member.socialMedia && (
-                                        <Card>
-                                            <CardContent className="pt-6">
-                                                <h3 className="font-medium mb-4">Social Media</h3>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    {member.socialMedia.twitter && (
-                                                        <a
-                                                            href={member.socialMedia.twitter}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                                                        >
-                                                            <Twitter className="h-4 w-4" />
-                                                            Twitter
-                                                        </a>
-                                                    )}
-                                                    {member.socialMedia.instagram && (
-                                                        <a
-                                                            href={member.socialMedia.instagram}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                                                        >
-                                                            <Instagram className="h-4 w-4" />
-                                                            Instagram
-                                                        </a>
-                                                    )}
-                                                    {member.socialMedia.youtube && (
-                                                        <a
-                                                            href={member.socialMedia.youtube}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                                                        >
-                                                            <Youtube className="h-4 w-4" />
-                                                            YouTube
-                                                        </a>
-                                                    )}
-                                                    {member.socialMedia.website && (
-                                                        <a
-                                                            href={member.socialMedia.website}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-2 text-sm hover:text-primary transition-colors"
-                                                        >
-                                                            <Globe className="h-4 w-4" />
-                                                            Website
-                                                        </a>
-                                                    )}
                                                 </div>
                                             </CardContent>
                                         </Card>

@@ -177,6 +177,119 @@ export function TeamMemberCard({
               </div>
             )}
 
+            {user.socialMedia && Object.keys(user.socialMedia).length > 0 && (
+              <div className="flex items-center justify-center gap-2 mb-3">
+                {user.socialMedia.twitter && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={user.socialMedia.twitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Twitter className="h-4 w-4" />
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent>Twitter</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {user.socialMedia.linkedin && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={user.socialMedia.linkedin}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Linkedin className="h-4 w-4" />
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent>LinkedIn</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {user.socialMedia.instagram && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={user.socialMedia.instagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Instagram className="h-4 w-4" />
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent>Instagram</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {user.socialMedia.facebook && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={user.socialMedia.facebook}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Facebook className="h-4 w-4" />
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent>Facebook</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {user.socialMedia.youtube && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={user.socialMedia.youtube}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Youtube className="h-4 w-4" />
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent>YouTube</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {user.socialMedia.customLinks?.map((link, index) => (
+                  <TooltipProvider key={index}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <a
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <LinkIcon className="h-4 w-4" />
+                        </a>
+                      </TooltipTrigger>
+                      <TooltipContent>{link.title}</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
+            )}
+
             {strikeStatus.total > 0 && (
               <div className="mt-3">
                 <Alert
