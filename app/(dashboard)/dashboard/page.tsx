@@ -7,7 +7,7 @@ import { DashboardStats } from "@/components/dashboard/dashboard-stats"
 import { RecentInvoices } from "@/components/dashboard/recent-invoices"
 import { UpcomingEvents } from "@/components/dashboard/news-section"
 import { MeetingNotifications } from "@/components/dashboard/meeting-notifications"
-import { IncomeReport } from "@/components/dashboard/income-report"
+import { FinancialAnalytics } from "@/components/dashboard/financial-analytics"
 import { useAuth } from "@/lib/auth-context"
 
 export default function DashboardPage() {
@@ -68,7 +68,7 @@ export default function DashboardPage() {
 
         {isOwner && (
           <TabsContent value="analytics" className="space-y-4">
-            <IncomeReport />
+            <FinancialAnalytics />
           </TabsContent>
         )}
 

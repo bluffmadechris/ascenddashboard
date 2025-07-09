@@ -25,8 +25,6 @@ import { toast } from "sonner"
 interface OwnerStats {
   totalRevenue: number;
   monthlyRevenue: number;
-  totalProfit: number;
-  monthlyProfit: number;
   activeClients: number;
   totalEmployees: number;
 }
@@ -41,8 +39,6 @@ export default function OwnerPanelPage() {
   const [stats, setStats] = useState<OwnerStats>({
     totalRevenue: 0,
     monthlyRevenue: 0,
-    totalProfit: 0,
-    monthlyProfit: 0,
     activeClients: 0,
     totalEmployees: 0
   })
@@ -81,8 +77,6 @@ export default function OwnerPanelPage() {
         const data = {
           totalRevenue: Number((response.data as any).totalRevenue) || 0,
           monthlyRevenue: Number((response.data as any).monthlyRevenue) || 0,
-          totalProfit: Number((response.data as any).totalProfit) || 0,
-          monthlyProfit: Number((response.data as any).monthlyProfit) || 0,
           activeClients: Number((response.data as any).activeClients) || 0,
           totalEmployees: Number((response.data as any).totalEmployees) || 0
         }
@@ -337,24 +331,6 @@ export default function OwnerPanelPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">{formatCurrency(stats.monthlyRevenue)}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Total Profit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatCurrency(stats.totalProfit)}</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Profit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{formatCurrency(stats.monthlyProfit)}</p>
           </CardContent>
         </Card>
 

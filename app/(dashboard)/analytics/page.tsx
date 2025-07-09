@@ -2,9 +2,9 @@
 
 import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ProfitStatsManager } from "@/components/dashboard/profit-stats-manager"
+import { FinancialAnalytics } from "@/components/dashboard/financial-analytics"
 import { DashboardStats } from "@/components/dashboard/dashboard-stats"
-import { BarChart, TrendingUp, DollarSign } from "lucide-react"
+import { BarChart, TrendingUp, DollarSign, Calculator, Target } from "lucide-react"
 
 export default function AnalyticsPage() {
     const { user } = useAuth()
@@ -52,13 +52,13 @@ export default function AnalyticsPage() {
                 <DashboardStats />
             </div>
 
-            {/* Profit Statistics */}
+            {/* Financial Analytics */}
             <div>
                 <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <DollarSign className="h-5 w-5" />
-                    Profit Statistics
+                    <Calculator className="h-5 w-5" />
+                    Financial Analytics
                 </h2>
-                <ProfitStatsManager />
+                <FinancialAnalytics />
             </div>
 
             {/* Additional Analytics Section */}
@@ -67,36 +67,45 @@ export default function AnalyticsPage() {
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Revenue Trends</CardTitle>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <TrendingUp className="h-5 w-5" />
+                                Revenue Trends
+                            </CardTitle>
                             <CardDescription>Month-over-month revenue analysis</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
-                                Detailed revenue tracking and forecasting tools will be available here.
+                                Track your revenue patterns and identify growth opportunities with detailed monthly breakdowns.
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Client Performance</CardTitle>
-                            <CardDescription>Client profitability metrics</CardDescription>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Target className="h-5 w-5" />
+                                Profit Tracking
+                            </CardTitle>
+                            <CardDescription>Real-time profit balance monitoring</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
-                                Client-specific revenue and project performance analytics.
+                                Monitor your profit balance in real-time, including automatic deductions for paid invoices.
                             </p>
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg">Team Productivity</CardTitle>
-                            <CardDescription>Team performance insights</CardDescription>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <DollarSign className="h-5 w-5" />
+                                Expense Management
+                            </CardTitle>
+                            <CardDescription>Comprehensive expense tracking</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <p className="text-sm text-muted-foreground">
-                                Team member productivity and project completion metrics.
+                                Track all business expenses by category and analyze spending patterns to optimize costs.
                             </p>
                         </CardContent>
                     </Card>
