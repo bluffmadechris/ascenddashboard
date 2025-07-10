@@ -179,10 +179,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const response = await apiClient.getUsers()
         if (response.success && response.data?.users) {
-          // Ensure each user has a clientAccess array and proper avatar mapping for frontend compatibility
+          // Ensure each user has a clientAccess array (API client already mapped avatar_url, social_links, bio)
           const usersWithClientAccess = response.data.users.map(user => ({
             ...user,
-            avatar: user.avatar_url || user.avatar || "", // Ensure avatar field is properly mapped
             clientAccess: [] // Default to empty array since API doesn't provide this
           } as unknown as User))
 
@@ -232,10 +231,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await apiClient.login(email, password)
         console.log("🔄 response", response)
         if (response.success && response.data?.user) {
-          // Ensure user has clientAccess property and proper avatar mapping for frontend compatibility
+          // Ensure user has clientAccess property (API client already mapped avatar_url, social_links, bio)
           const userWithClientAccess = {
             ...response.data.user,
-            avatar: response.data.user.avatar_url || response.data.user.avatar || "", // Ensure avatar field is properly mapped
             clientAccess: [] // Default to empty array since API doesn't provide this
           } as unknown as User
           setUser(userWithClientAccess)

@@ -34,8 +34,8 @@ export function TeamMembersList({ onEditMember }: TeamMembersListProps) {
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
   const [editTitleValue, setEditTitleValue] = useState("")
 
-  // Filter out the current user (owner) from the list
-  const teamMembers = users.filter((u) => u.id !== currentUser?.id)
+  // Include all users including the current user so owners can edit their own profile
+  const teamMembers = users
 
   // Handle title editing
   const handleStartEditTitle = (userId: string, currentTitle: string) => {
@@ -257,7 +257,14 @@ export function TeamMembersList({ onEditMember }: TeamMembersListProps) {
                           <Edit className="h-4 w-4" />
                           <span className="sr-only">Edit</span>
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(member.id)}>
+                        {/* Prevent users from deleting their own account */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteClick(member.id)}
+                          disabled={member.id === currentUser?.id}
+                          title={member.id === currentUser?.id ? "You cannot delete your own account" : "Delete team member"}
+                        >
                           <Trash2 className="h-4 w-4" />
                           <span className="sr-only">Delete</span>
                         </Button>

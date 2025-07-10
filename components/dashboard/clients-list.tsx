@@ -46,7 +46,7 @@ interface ClientsListProps {
 
 export function ClientsList({ initialClients = [], onClientDelete }: ClientsListProps) {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, isApiConnected } = useAuth()
   const [clients, setClients] = useState<Client[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -57,7 +57,7 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
 
   const isOwner = user?.role === "owner"
 
-  const loadClients = useCallback(() => {
+  const loadClients = useCallback(async () => {
     const defaultClients: Record<string, Client> = {
       capri: {
         id: "capri",
@@ -90,43 +90,91 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
     }
 
     try {
-      const storedClients = loadData<Record<string, Client>>("clients", {})
-      const allClients = { ...defaultClients, ...storedClients }
-      const clientsArray = Object.values(allClients)
-
-      setClients(clientsArray)
+      if (isApiConnected) {
+        // Load clients from API
+        const response = await apiClient.getClients()
+        if (response.success && response.data?.clients) {
+          // Transform API clients to match frontend format
+          const apiClients = response.data.clients.map(client => ({
+            id: client.id.toString(),
+            name: client.name,
+            logo: `/placeholder.svg?key=${client.name.toLowerCase()}`,
+            industry: client.company || "Unknown",
+            status: client.status || "Active",
+          }))
+          setClients(apiClients)
+        } else {
+          // Fall back to default clients if API fails
+          setClients(Object.values(defaultClients))
+        }
+      } else {
+        // Load from localStorage
+        const storedClients = loadData<Record<string, Client>>("clients", {})
+        const allClients = { ...defaultClients, ...storedClients }
+        const clientsArray = Object.values(allClients)
+        setClients(clientsArray)
+      }
       setIsLoading(false)
     } catch (error) {
       console.error("Error loading clients:", error)
+      // Fall back to default clients on error
       setClients(Object.values(defaultClients))
       setIsLoading(false)
     }
-  }, [])
+  }, [isApiConnected])
 
   useEffect(() => {
     loadClients()
   }, [loadClients])
 
-  const handleDelete = useCallback((clientId: string) => {
-    const updatedClients = clients.filter((client) => client.id !== clientId)
+  const handleDelete = useCallback(async (clientId: string) => {
+    try {
+      if (isApiConnected) {
+        // Use API to delete client
+        const response = await apiClient.deleteClient(parseInt(clientId))
 
-    setClients(updatedClients)
+        if (!response.success) {
+          throw new Error(response.message || 'Failed to delete client')
+        }
 
-    const clientsRecord = updatedClients.reduce((acc, client) => {
-      acc[client.id] = client
-      return acc
-    }, {} as Record<string, Client>)
-    saveData("clients", clientsRecord)
+        toast({
+          title: "Client deleted",
+          description: "The client has been permanently removed.",
+        })
+      } else {
+        // Fall back to localStorage deletion
+        const updatedClients = clients.filter((client) => client.id !== clientId)
+        setClients(updatedClients)
 
-    if (onClientDelete) {
-      onClientDelete(clientId, updatedClients)
+        const clientsRecord = updatedClients.reduce((acc, client) => {
+          acc[client.id] = client
+          return acc
+        }, {} as Record<string, Client>)
+        saveData("clients", clientsRecord)
+
+        toast({
+          title: "Client deleted",
+          description: "The client has been removed from your dashboard.",
+        })
+      }
+
+      // Update local state regardless of API or localStorage
+      const updatedClients = clients.filter((client) => client.id !== clientId)
+      setClients(updatedClients)
+
+      if (onClientDelete) {
+        onClientDelete(clientId, updatedClients)
+      }
+
+    } catch (error) {
+      console.error('Error deleting client:', error)
+      toast({
+        title: "Error deleting client",
+        description: "There was a problem deleting the client. Please try again.",
+        variant: "destructive"
+      })
     }
-
-    toast({
-      title: "Client deleted",
-      description: "The client has been removed from your dashboard.",
-    })
-  }, [clients, onClientDelete, toast])
+  }, [clients, onClientDelete, toast, isApiConnected])
 
   const filteredClients = clients.filter(client => {
     const searchLower = searchQuery.toLowerCase()

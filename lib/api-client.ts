@@ -225,6 +225,10 @@ class ApiClient {
         response.data.user.socialMedia = response.data.user.social_links;
         delete response.data.user.social_links;
       }
+      // Ensure bio field is preserved (bio stays as bio)
+      if ('bio' in response.data.user) {
+        response.data.user.bio = response.data.user.bio;
+      }
     }
     
     return response;
@@ -255,6 +259,10 @@ class ApiClient {
           user.socialMedia = user.social_links;
           delete user.social_links;
         }
+        // Ensure bio field is preserved (bio stays as bio)
+        if ('bio' in user) {
+          user.bio = user.bio;
+        }
         return user;
       });
     }
@@ -274,6 +282,10 @@ class ApiClient {
       if ('social_links' in response.data.user) {
         response.data.user.socialMedia = response.data.user.social_links;
         delete response.data.user.social_links;
+      }
+      // Ensure bio field is preserved (bio stays as bio)
+      if ('bio' in response.data.user) {
+        response.data.user.bio = response.data.user.bio;
       }
     }
     
@@ -349,6 +361,11 @@ class ApiClient {
         // Map social_links back to socialMedia
         if (userData.social_links) {
           userData.socialMedia = userData.social_links;
+        }
+        
+        // Ensure bio field is preserved (bio stays as bio)
+        if ('bio' in userData) {
+          userData.bio = userData.bio;
         }
         
         console.log('Mapped user data:', userData); // Debug log
