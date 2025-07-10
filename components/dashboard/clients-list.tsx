@@ -37,8 +37,6 @@ interface Client {
   logo: string
   industry: string
   status: string
-  projects: number
-  totalSpent: string
 }
 
 interface ClientsListProps {
@@ -67,8 +65,6 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
         logo: "/placeholder.svg?key=capri",
         industry: "Entertainment",
         status: "Active",
-        projects: 4,
-        totalSpent: "$32,500.00",
       },
       "piper-rockelle": {
         id: "piper-rockelle",
@@ -76,8 +72,6 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
         logo: "/placeholder.svg?key=piper",
         industry: "Content Creation",
         status: "Active",
-        projects: 3,
-        totalSpent: "$28,000.00",
       },
       paryeet: {
         id: "paryeet",
@@ -85,8 +79,6 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
         logo: "/placeholder.svg?key=paryeet",
         industry: "Digital Media",
         status: "Active",
-        projects: 2,
-        totalSpent: "$15,500.00",
       },
       "lacy-vods": {
         id: "lacy-vods",
@@ -94,8 +86,6 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
         logo: "/placeholder.svg?key=lacy",
         industry: "Video Production",
         status: "Active",
-        projects: 3,
-        totalSpent: "$22,000.00",
       },
     }
 
@@ -222,8 +212,6 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
                 <TableHead>Client</TableHead>
                 <TableHead>Industry</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Projects</TableHead>
-                <TableHead>Total Spent</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -249,17 +237,15 @@ export function ClientsList({ initialClients = [], onClientDelete }: ClientsList
                     <div className="flex items-center">
                       <div
                         className={`h-2 w-2 rounded-full mr-2 ${client.status === "Active"
-                            ? "bg-green-500"
-                            : client.status === "Paused"
-                              ? "bg-yellow-500"
-                              : "bg-gray-500"
+                          ? "bg-green-500"
+                          : client.status === "Paused"
+                            ? "bg-yellow-500"
+                            : "bg-gray-500"
                           }`}
                       />
                       {client.status}
                     </div>
                   </TableCell>
-                  <TableCell>{client.projects}</TableCell>
-                  <TableCell>{client.totalSpent}</TableCell>
                   <TableCell>
                     {isOwner && (
                       <DropdownMenu>

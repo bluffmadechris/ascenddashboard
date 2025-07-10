@@ -25,8 +25,6 @@ type Client = {
   logo: string
   industry: string
   status: string
-  projects: number
-  totalSpent: string
   contactPerson: string
   contactEmail: string
 }
@@ -42,8 +40,6 @@ export function EditClientDropdown({ client, onClientUpdated }: EditClientDropdo
   const [formData, setFormData] = useState({
     logo: client.logo,
     status: client.status,
-    projects: client.projects,
-    totalSpent: client.totalSpent.replace("$", "").replace(",", ""),
     contactPerson: client.contactPerson,
     contactEmail: client.contactEmail,
   })
@@ -59,19 +55,11 @@ export function EditClientDropdown({ client, onClientUpdated }: EditClientDropdo
   }
 
   const handleSave = () => {
-    // Format the total spent value
-    const formattedTotalSpent = `$${Number.parseFloat(formData.totalSpent).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`
-
     // Create updated client data
     const updatedClient: Client = {
       ...client,
       logo: formData.logo,
       status: formData.status,
-      projects: Number(formData.projects),
-      totalSpent: formattedTotalSpent,
       contactPerson: formData.contactPerson,
       contactEmail: formData.contactEmail,
     }
@@ -174,32 +162,6 @@ export function EditClientDropdown({ client, onClientUpdated }: EditClientDropdo
                     <SelectItem value="Pending">Pending</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="projects">Number of Projects</Label>
-                <Input
-                  id="projects"
-                  name="projects"
-                  type="number"
-                  min="0"
-                  value={formData.projects}
-                  onChange={handleInputChange}
-                  placeholder="Enter number of projects"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="totalSpent">Total Spent</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2">$</span>
-                  <Input
-                    id="totalSpent"
-                    name="totalSpent"
-                    className="pl-7"
-                    value={formData.totalSpent}
-                    onChange={handleInputChange}
-                    placeholder="0.00"
-                  />
-                </div>
               </div>
             </div>
           )}

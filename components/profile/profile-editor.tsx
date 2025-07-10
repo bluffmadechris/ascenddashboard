@@ -127,6 +127,8 @@ export function ProfileEditor() {
             const response = await api.updateUser(user?.id, { avatar: url })
             if (response.success) {
               updateUser(response.data.user)
+              // Update local form data as well
+              setFormData(prev => ({ ...prev, avatar: url }))
               toast({
                 title: "Success",
                 description: "Profile picture updated"
@@ -135,6 +137,7 @@ export function ProfileEditor() {
               throw new Error(response.message)
             }
           } catch (error) {
+            console.error('Avatar update error:', error)
             toast({
               title: "Error",
               description: error instanceof Error ? error.message : "Failed to update profile picture",

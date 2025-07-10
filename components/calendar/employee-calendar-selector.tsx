@@ -153,65 +153,67 @@ export function EmployeeCalendarSelector({
                 </Button>
             </CardHeader>
             <CardContent className="pt-0">
-                <ScrollArea className="max-h-64">
-                    <div className="space-y-2">
-                        {employeeInfo.map((employee) => (
-                            <div
-                                key={employee.userId}
-                                className={cn(
-                                    "flex items-center space-x-3 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer",
-                                    employee.visible && "bg-white/10"
-                                )}
-                                onClick={() => onEmployeeToggle(employee.userId)}
-                            >
-                                <Checkbox
-                                    checked={employee.visible}
-                                    onChange={() => onEmployeeToggle(employee.userId)}
-                                    className="border-white/30 data-[state=checked]:bg-white data-[state=checked]:text-black"
-                                />
+                <div className="h-64 overflow-hidden">
+                    <ScrollArea className="h-full">
+                        <div className="space-y-2 pr-3">
+                            {employeeInfo.map((employee) => (
+                                <div
+                                    key={employee.userId}
+                                    className={cn(
+                                        "flex items-center space-x-3 p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer",
+                                        employee.visible && "bg-white/10"
+                                    )}
+                                    onClick={() => onEmployeeToggle(employee.userId)}
+                                >
+                                    <Checkbox
+                                        checked={employee.visible}
+                                        onChange={() => onEmployeeToggle(employee.userId)}
+                                        className="border-white/30 data-[state=checked]:bg-white data-[state=checked]:text-black"
+                                    />
 
-                                <div className="flex items-center space-x-2 flex-1 min-w-0">
-                                    <div className="relative">
-                                        <Avatar className="h-6 w-6">
-                                            <AvatarImage src={employee.avatar} alt={employee.name} />
-                                            <AvatarFallback className="text-xs bg-white/20">
-                                                {employee.name.substring(0, 2).toUpperCase()}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        {/* Color indicator */}
-                                        <div
-                                            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-[#0f1729]"
-                                            style={{ backgroundColor: employee.color }}
-                                        />
-                                    </div>
-
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center space-x-2">
-                                            <span className="text-sm font-medium text-white truncate">
-                                                {employee.name}
-                                            </span>
-                                            {employee.visible && (
-                                                <Eye className="h-3 w-3 text-white/60" />
-                                            )}
+                                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                        <div className="relative">
+                                            <Avatar className="h-6 w-6">
+                                                <AvatarImage src={employee.avatar} alt={employee.name} />
+                                                <AvatarFallback className="text-xs bg-white/20">
+                                                    {employee.name.substring(0, 2).toUpperCase()}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            {/* Color indicator */}
+                                            <div
+                                                className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border border-[#0f1729]"
+                                                style={{ backgroundColor: employee.color }}
+                                            />
                                         </div>
-                                        <div className="flex items-center space-x-2 text-xs text-white/60">
-                                            <span className="capitalize">{employee.role.replace("_", " ")}</span>
-                                            {employee.eventCount > 0 && (
-                                                <>
-                                                    <span>•</span>
-                                                    <span className="flex items-center">
-                                                        <Calendar className="h-3 w-3 mr-1" />
-                                                        {employee.eventCount}
-                                                    </span>
-                                                </>
-                                            )}
+
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center space-x-2">
+                                                <span className="text-sm font-medium text-white truncate">
+                                                    {employee.name}
+                                                </span>
+                                                {employee.visible && (
+                                                    <Eye className="h-3 w-3 text-white/60" />
+                                                )}
+                                            </div>
+                                            <div className="flex items-center space-x-2 text-xs text-white/60">
+                                                <span className="capitalize">{employee.role.replace("_", " ")}</span>
+                                                {employee.eventCount > 0 && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span className="flex items-center">
+                                                            <Calendar className="h-3 w-3 mr-1" />
+                                                            {employee.eventCount}
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                </ScrollArea>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </div>
             </CardContent>
         </Card>
     )

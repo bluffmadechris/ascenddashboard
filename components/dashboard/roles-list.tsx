@@ -16,6 +16,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { PlusCircle, Edit, Trash2, ShieldCheck, Shield } from "lucide-react"
+import { useRoles } from "@/lib/roles-context"
+import { useAuth } from "@/lib/auth-context"
 
 interface RolesListProps {
   onCreateRole?: () => void
@@ -23,36 +25,14 @@ interface RolesListProps {
 }
 
 export function RolesList({ onCreateRole, onEditRole }: RolesListProps) {
-  // Mock roles data - in a real app, this would come from your roles context
-  const [roles] = useState([
-    {
-      id: "owner",
-      name: "Owner",
-      description: "Full access to all resources",
-      isSystem: true,
-      permissions: ["all"],
-      color: "purple",
-      memberCount: 1,
-    },
-    {
-      id: "admin",
-      name: "Manager",
-      description: "Administrative access to the system",
-      isSystem: true,
-      permissions: ["manage_users", "manage_content", "view_reports"],
-      color: "blue",
-      memberCount: 2,
-    },
-    {
-      id: "employee",
-      name: "Creative",
-      description: "Basic access to the platform",
-      isSystem: true,
-      permissions: ["view_dashboard", "view_calendar", "view_team", "view_availability"],
-      color: "amber",
-      memberCount: 5,
-    },
-  ])
+  const { roles, deleteRole } = useRoles()
+  const { users } = useAuth()
+
+  // Calculate member count for each role
+  const getRoleMemberCount = (roleId: string) => {
+    if (!users) return 0
+    return users.filter(user => user.role === roleId).length
+  }
 
   const handleCreateRole = () => {
     if (onCreateRole) {
@@ -67,8 +47,7 @@ export function RolesList({ onCreateRole, onEditRole }: RolesListProps) {
   }
 
   const handleDeleteRole = (roleId: string) => {
-    // In a real app, you would call a function to delete the role
-    console.log(`Delete role: ${roleId}`)
+    deleteRole(roleId)
   }
 
   return (
@@ -85,79 +64,83 @@ export function RolesList({ onCreateRole, onEditRole }: RolesListProps) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {roles.map((role) => (
-          <Card key={role.id} className={`border-l-4 ${getBorderColor(role.color)}`}>
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="flex items-center">
-                    {role.name}
-                    {role.isSystem && (
-                      <Badge variant="secondary" className="ml-2">
-                        System
-                      </Badge>
+        {roles.map((role) => {
+          const memberCount = getRoleMemberCount(role.id)
+
+          return (
+            <Card key={role.id} className={`border-l-4 ${getBorderColor(role.color || "gray")}`}>
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      {role.name}
+                      {role.isSystem && (
+                        <Badge variant="secondary" className="ml-2">
+                          System
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    <CardDescription>{role.description}</CardDescription>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditRole(role.id)} title="Edit role">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    {!role.isSystem && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" title="Delete role">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Role</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete the {role.name} role? This action cannot be undone.
+                              {memberCount > 0 && (
+                                <p className="mt-2 text-destructive">
+                                  Warning: {memberCount} team member{memberCount !== 1 ? "s" : ""} currently
+                                  have this role assigned.
+                                </p>
+                              )}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteRole(role.id)}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     )}
-                  </CardTitle>
-                  <CardDescription>{role.description}</CardDescription>
+                  </div>
                 </div>
-                <div className="flex space-x-2">
-                  <Button variant="ghost" size="icon" onClick={() => handleEditRole(role.id)} title="Edit role">
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  {!role.isSystem && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" title="Delete role">
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Role</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete the {role.name} role? This action cannot be undone.
-                            {role.memberCount > 0 && (
-                              <p className="mt-2 text-destructive">
-                                Warning: {role.memberCount} team member{role.memberCount !== 1 ? "s" : ""} currently
-                                have this role assigned.
-                              </p>
-                            )}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteRole(role.id)}>Delete</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+              </CardHeader>
+              <CardContent className="pb-2">
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <div className="flex items-center mr-4">
+                    {role.isSystem ? (
+                      <ShieldCheck className="mr-1 h-4 w-4 text-primary" />
+                    ) : (
+                      <Shield className="mr-1 h-4 w-4" />
+                    )}
+                    {role.permissions.some(p => p.id === "all" && p.enabled)
+                      ? "All permissions"
+                      : `${role.permissions.filter(p => p.enabled).length} permission${role.permissions.filter(p => p.enabled).length !== 1 ? "s" : ""}`}
+                  </div>
+                  <div>
+                    {memberCount} member{memberCount !== 1 ? "s" : ""}
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pb-2">
-              <div className="flex items-center text-sm text-muted-foreground">
-                <div className="flex items-center mr-4">
-                  {role.isSystem ? (
-                    <ShieldCheck className="mr-1 h-4 w-4 text-primary" />
-                  ) : (
-                    <Shield className="mr-1 h-4 w-4" />
-                  )}
-                  {role.permissions.includes("all")
-                    ? "All permissions"
-                    : `${role.permissions.length} permission${role.permissions.length !== 1 ? "s" : ""}`}
-                </div>
-                <div>
-                  {role.memberCount} member{role.memberCount !== 1 ? "s" : ""}
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter className="pt-2">
-              <Button variant="outline" size="sm" onClick={() => handleEditRole(role.id)}>
-                View Details
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+              </CardContent>
+              <CardFooter className="pt-2">
+                <Button variant="outline" size="sm" onClick={() => handleEditRole(role.id)}>
+                  View Details
+                </Button>
+              </CardFooter>
+            </Card>
+          )
+        })}
       </div>
     </div>
   )

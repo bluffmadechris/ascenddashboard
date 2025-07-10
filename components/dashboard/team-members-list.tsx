@@ -2,9 +2,11 @@
 
 import { useState } from "react"
 import { useAuth } from "@/lib/auth-context"
+import { useDisplayTitle } from "@/lib/display-title-context"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -14,7 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Edit, Trash2, UserPlus } from "lucide-react"
+import { Edit, Trash2, UserPlus, Check, X, Edit2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -24,13 +26,47 @@ interface TeamMembersListProps {
 
 export function TeamMembersList({ onEditMember }: TeamMembersListProps) {
   const { users, user: currentUser, deleteUser } = useAuth()
+  const { getDisplayTitle, updateDisplayTitle } = useDisplayTitle()
   const { toast } = useToast()
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null)
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null)
+  const [editTitleValue, setEditTitleValue] = useState("")
 
   // Filter out the current user (owner) from the list
   const teamMembers = users.filter((u) => u.id !== currentUser?.id)
+
+  // Handle title editing
+  const handleStartEditTitle = (userId: string, currentTitle: string) => {
+    setEditingTitleId(userId)
+    setEditTitleValue(currentTitle)
+  }
+
+  const handleSaveTitle = (userId: string) => {
+    if (editTitleValue.trim()) {
+      updateDisplayTitle(userId, editTitleValue.trim())
+      toast({
+        title: "Title Updated",
+        description: "Team member title has been updated successfully.",
+      })
+    }
+    setEditingTitleId(null)
+    setEditTitleValue("")
+  }
+
+  const handleCancelTitle = () => {
+    setEditingTitleId(null)
+    setEditTitleValue("")
+  }
+
+  const handleTitleKeyPress = (e: React.KeyboardEvent, userId: string) => {
+    if (e.key === 'Enter') {
+      handleSaveTitle(userId)
+    } else if (e.key === 'Escape') {
+      handleCancelTitle()
+    }
+  }
 
   const handleDeleteClick = (memberId: string) => {
     setMemberToDelete(memberId)
@@ -114,6 +150,7 @@ export function TeamMembersList({ onEditMember }: TeamMembersListProps) {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
+              <TableHead>Title</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Client Access</TableHead>
@@ -123,7 +160,7 @@ export function TeamMembersList({ onEditMember }: TeamMembersListProps) {
           <TableBody>
             {teamMembers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-4">
+                <TableCell colSpan={6} className="text-center py-4">
                   <div className="flex flex-col items-center justify-center space-y-2">
                     <UserPlus className="h-8 w-8 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">No team members found</p>
@@ -134,55 +171,101 @@ export function TeamMembersList({ onEditMember }: TeamMembersListProps) {
                 </TableCell>
               </TableRow>
             ) : (
-              teamMembers.map((member) => (
-                <TableRow key={member.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={member.avatar || "/placeholder.svg"} alt={member.name} />
-                        <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="font-medium">{member.name}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{member.email}</TableCell>
-                  <TableCell>
-                    <Badge variant={getRoleBadgeVariant(member.role)}>{formatRoleName(member.role)}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(member.clientAccess || []).map((access) => (
-                        <Badge key={access.clientId} variant="outline" className="text-xs">
-                          {access.clientId === "capri"
-                            ? "Capri"
-                            : access.clientId === "piper-rockelle"
-                              ? "Piper Rockelle"
-                              : access.clientId === "paryeet"
-                                ? "Paryeet"
-                                : access.clientId === "lacy-vods"
-                                  ? "Lacy VODS"
-                                  : access.clientId}
-                        </Badge>
-                      ))}
-                      {(!member.clientAccess || member.clientAccess.length === 0) && (
-                        <span className="text-xs text-muted-foreground">No client access</span>
+              teamMembers.map((member) => {
+                const currentTitle = getDisplayTitle(member.id, member.role)
+                const isEditingTitle = editingTitleId === member.id
+
+                return (
+                  <TableRow key={member.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9">
+                          <AvatarImage src={member.avatar || "/placeholder.svg"} alt={member.name} />
+                          <AvatarFallback>{member.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div className="font-medium">{member.name}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {isEditingTitle ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editTitleValue}
+                            onChange={(e) => setEditTitleValue(e.target.value)}
+                            onKeyDown={(e) => handleTitleKeyPress(e, member.id)}
+                            autoFocus
+                            className="h-8 text-sm"
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleSaveTitle(member.id)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={handleCancelTitle}
+                            className="h-8 w-8 p-0"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{currentTitle}</span>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleStartEditTitle(member.id, currentTitle)}
+                            className="h-6 w-6 p-0 opacity-50 hover:opacity-100"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditClick(member.id)}>
-                        <Edit className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(member.id)}>
-                        <Trash2 className="h-4 w-4" />
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                    </TableCell>
+                    <TableCell>{member.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={getRoleBadgeVariant(member.role)}>{formatRoleName(member.role)}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {(member.clientAccess || []).map((access) => (
+                          <Badge key={access.clientId} variant="outline" className="text-xs">
+                            {access.clientId === "capri"
+                              ? "Capri"
+                              : access.clientId === "piper-rockelle"
+                                ? "Piper Rockelle"
+                                : access.clientId === "paryeet"
+                                  ? "Paryeet"
+                                  : access.clientId === "lacy-vods"
+                                    ? "Lacy VODS"
+                                    : access.clientId}
+                          </Badge>
+                        ))}
+                        {(!member.clientAccess || member.clientAccess.length === 0) && (
+                          <span className="text-xs text-muted-foreground">No client access</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleEditClick(member.id)}>
+                          <Edit className="h-4 w-4" />
+                          <span className="sr-only">Edit</span>
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(member.id)}>
+                          <Trash2 className="h-4 w-4" />
+                          <span className="sr-only">Delete</span>
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
             )}
           </TableBody>
         </Table>

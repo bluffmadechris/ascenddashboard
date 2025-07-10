@@ -179,7 +179,7 @@ export default function OwnerPanelPage() {
   }
 
   console.log('Owner Panel - Active tab:', activeTab)
-  
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -190,7 +190,7 @@ export default function OwnerPanelPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="w-full grid grid-cols-4 lg:grid-cols-8 gap-1">
+        <TabsList className="w-full grid grid-cols-4 lg:grid-cols-7 gap-1">
           <TabsTrigger
             value="dashboard"
             onClick={() => setActiveTab("dashboard")}
@@ -217,15 +217,6 @@ export default function OwnerPanelPage() {
             <Users className="mr-2 h-4 w-4" />
             <span className="hidden sm:inline">Team</span>
             <span className="sm:hidden">Team</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="onboarding"
-            onClick={() => setActiveTab("onboarding")}
-            className="hover:bg-primary/5 data-[state=active]:bg-primary/10"
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">Onboarding</span>
-            <span className="sm:hidden">New</span>
           </TabsTrigger>
           <TabsTrigger
             value="notifications"
@@ -293,10 +284,6 @@ export default function OwnerPanelPage() {
               <TeamMembersList onEditMember={handleEditMember} />
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="onboarding" className="mt-6">
-          {/* Onboarding content */}
         </TabsContent>
 
         <TabsContent value="notifications" className="mt-6">

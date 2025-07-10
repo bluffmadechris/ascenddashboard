@@ -4,7 +4,7 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Camera, Loader2, Upload, Link, X } from "lucide-react"
-import { getInitials } from "@/lib/utils"
+import { getInitials, normalizeAvatarUrl, isValidAvatarUrl } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/components/ui/use-toast"
 import { apiClient } from "@/lib/api-client"
@@ -93,7 +93,20 @@ export function AvatarUpload({
 
       // Use the signed URL for immediate display, fallback to regular URL
       const newAvatarUrl = result.data.signed_url || result.data.avatar_url
+
+      // Update the avatar through the parent component callback
       onAvatarChange(newAvatarUrl)
+
+      // Also update through API client to ensure consistent state
+      try {
+        await apiClient.updateUser(user.id, {
+          avatar: result.data.avatar_url // Use the permanent URL for persistence
+        })
+      } catch (apiError) {
+        console.error('Failed to update avatar through API client:', apiError)
+        // Don't fail the upload if this fails, as the file was already uploaded
+      }
+
       setIsDialogOpen(false)
       toast({
         title: 'Success',
@@ -238,12 +251,7 @@ export function AvatarUpload({
 
     try {
       const response = await apiClient.updateUser(user.id, {
-        name: user.name,
-        avatar: "",
-        phone: user.phone,
-        title: user.title,
-        department: user.department,
-        role: user.role
+        avatar: ""
       })
 
       if (!response.success) {
@@ -271,7 +279,10 @@ export function AvatarUpload({
   return (
     <div className="relative" onMouseEnter={() => setIsHovering(true)} onMouseLeave={() => setIsHovering(false)}>
       <Avatar className="h-24 w-24">
-        <AvatarImage src={currentAvatar || "/placeholder.svg"} alt="Profile picture" />
+        <AvatarImage
+          src={normalizeAvatarUrl(currentAvatar) || "/placeholder.svg"}
+          alt="Profile picture"
+        />
         <AvatarFallback className="text-lg">{getInitials(name)}</AvatarFallback>
       </Avatar>
 
@@ -364,7 +375,7 @@ export function AvatarUpload({
             </TabsContent>
           </Tabs>
 
-          {currentAvatar && (
+          {isValidAvatarUrl(currentAvatar) && (
             <div className="border-t pt-4">
               <Button
                 onClick={handleRemoveAvatar}

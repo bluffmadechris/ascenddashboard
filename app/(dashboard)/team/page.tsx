@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
-import { useDisplayTitle } from "@/lib/display-title-context"
+import { useRoles } from "@/lib/roles-context"
 import { TeamMemberCard } from "@/components/dashboard/team-member-card"
 import { RequestMeetingButton } from "@/components/dashboard/request-meeting-button"
 import { loadData, saveData } from "@/lib/data-persistence"
 import { TeamMemberCalendar } from "@/components/calendar/team-member-calendar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Search, Users, Calendar, Filter, Crown, Building, Palette, GitBranch } from "lucide-react"
+import { Search, Users, Calendar, Filter, Crown, Building, Palette } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -20,24 +20,60 @@ import { TeamHierarchyDisplay } from "@/components/dashboard/team-hierarchy-disp
 import { TeamMembersList } from "@/components/dashboard/team-members-list"
 import { OrgChart } from "@/components/org-chart/org-chart"
 import { OrgChartGrid } from "@/components/org-chart/org-chart-grid"
+import { isValidAvatarUrl } from "@/lib/utils"
 
 export default function TeamPage() {
-  const { users, refreshUsers } = useAuth()
-  const { getDisplayTitle } = useDisplayTitle()
+  const { users, refreshUsers, user: currentUser, isApiConnected } = useAuth()
+  const { roles, getRole } = useRoles()
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedView, setSelectedView] = useState<"list" | "org">("org")
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [visibilityStates, setVisibilityStates] = useState<Record<string, boolean>>({})
   const [filterRole, setFilterRole] = useState<string | null>(null)
 
+  // Debug logging for current user and users array
+  useEffect(() => {
+    console.log('Team page - Current user:', currentUser?.name, currentUser?.role, currentUser?.id)
+    console.log('Team page - All users:', users.map(u => ({ name: u.name, role: u.role, id: u.id })))
+    console.log('Team page - Current user in users array:', users.find(u => u.id === currentUser?.id) ? 'YES' : 'NO')
+  }, [users, currentUser])
+
   // Refresh users when component mounts to ensure fresh data
   useEffect(() => {
-    refreshUsers()
+    console.log('🔄 Team page - initial refreshUsers call')
+    refreshUsers('teamPageInitial')
+
+    // Force a second refresh after a short delay to ensure we get the latest data
+    const timeoutId = setTimeout(() => {
+      console.log('🔄 Team page - second refreshUsers call (1000ms delay)')
+      refreshUsers('teamPageSecond')
+    }, 1000)
+
+    return () => clearTimeout(timeoutId)
   }, [])
+
+  // Also refresh when the component becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        console.log('🔄 Team page - refreshUsers on visibility change')
+        refreshUsers('teamPageVisibility')
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [refreshUsers])
+
+  // Normalize user data to ensure avatar field is properly set
+  const normalizedUsers = users.map(user => ({
+    ...user,
+    avatar: user.avatar || (user as any).avatar_url || ""
+  }))
 
   // Load visibility states from local storage
   useEffect(() => {
-    const savedStates = loadData("team-visibility-states") || {}
+    const savedStates = loadData("team-visibility-states", {})
     setVisibilityStates(savedStates)
   }, [])
 
@@ -51,8 +87,8 @@ export default function TeamPage() {
     saveData("team-visibility-states", newStates)
   }
 
-  // Filter users based on search query and role filter
-  const filteredUsers = users.filter((user) => {
+  // Filter users based on search query and role filter (use normalized users)
+  const filteredUsers = normalizedUsers.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -63,32 +99,56 @@ export default function TeamPage() {
     return matchesSearch && matchesRole
   })
 
-  // Get unique roles for filtering
-  const uniqueRoles = Array.from(new Set(users.map((user) => user.role)))
+  // Get unique roles for filtering (use normalized users)
+  const uniqueRoles = Array.from(new Set(normalizedUsers.map((user) => user.role)))
 
-  // Get user category for styling
+  // Get user category based on actual role system
   const getUserCategory = (userRole: string): string => {
-    if (userRole === "owner" || userRole === "president" || userRole === "ceo") {
-      return "owner"
+    // Get the role definition from the role system
+    const roleDefinition = getRole(userRole)
+
+    // First, check direct role string matches (most reliable)
+    const roleStr = userRole.toLowerCase()
+
+    // Leadership roles
+    if (roleStr === "owner" || roleStr === "ceo" || roleStr === "president" || roleStr === "founder") {
+      return "leadership"
     }
-    if (
-      userRole === "manager" ||
-      userRole === "youtube_manager" ||
-      userRole.includes("manager") ||
-      userRole.includes("director") ||
-      userRole.includes("lead")
-    ) {
-      return "management"
+
+    // Manager roles
+    if (roleStr === "admin" || roleStr === "manager" || roleStr === "youtube_manager" ||
+      roleStr.includes("manager") || roleStr.includes("director") || roleStr.includes("lead")) {
+      return "managers"
     }
+
+    // If we have a role definition, use its properties
+    if (roleDefinition) {
+      // Leadership: Owner role
+      if (roleDefinition.id === "owner" || roleDefinition.name.toLowerCase().includes("owner") ||
+        roleDefinition.name.toLowerCase().includes("ceo") || roleDefinition.name.toLowerCase().includes("president")) {
+        return "leadership"
+      }
+
+      // Managers: Admin role or roles with "manager" in the name
+      if (roleDefinition.id === "admin" || roleDefinition.name.toLowerCase().includes("manager") ||
+        roleDefinition.name.toLowerCase().includes("director") || roleDefinition.name.toLowerCase().includes("lead")) {
+        return "managers"
+      }
+
+      // Creative Team: Employee role or other creative roles
+      return "creative"
+    }
+
+    // Creative roles (default for most other roles)
     return "creative"
   }
 
   // Get role color based on category
   const getRoleColor = (category: string): string => {
     switch (category) {
-      case "owner":
+      case "leadership":
         return "bg-purple-100 dark:bg-purple-950/40"
-      case "management":
+      case "managers":
         return "bg-blue-100 dark:bg-blue-950/40"
       case "creative":
         return "bg-amber-100 dark:bg-amber-950/40"
@@ -100,9 +160,9 @@ export default function TeamPage() {
   // Get role icon based on category
   const getRoleIcon = (category: string): string => {
     switch (category) {
-      case "owner":
+      case "leadership":
         return "👑"
-      case "management":
+      case "managers":
         return "📊"
       case "creative":
         return "✨"
@@ -111,26 +171,28 @@ export default function TeamPage() {
     }
   }
 
-  // Organize users by hierarchy
+  // Organize users by hierarchy in the correct order
   const organizeByHierarchy = (users: any[]) => {
-    const owners = users.filter(user => getUserCategory(user.role) === "owner")
+    const leadership = users.filter(user => getUserCategory(user.role) === "leadership")
       .sort((a, b) => a.name.localeCompare(b.name))
 
-    const management = users.filter(user => getUserCategory(user.role) === "management")
+    const managers = users.filter(user => getUserCategory(user.role) === "managers")
       .sort((a, b) => a.name.localeCompare(b.name))
 
     const creative = users.filter(user => getUserCategory(user.role) === "creative")
       .sort((a, b) => a.name.localeCompare(b.name))
 
-    return { owners, management, creative }
+    return { leadership, managers, creative }
   }
 
   // Sort users for grid view (fallback)
   const sortedUsers = filteredUsers.sort((a, b) => {
     const getRolePriority = (role: string) => {
-      if (role === "owner" || role === "president" || role === "ceo") return 1
-      if (role.includes("manager") || role.includes("director") || role.includes("lead")) return 2
-      return 3
+      const category = getUserCategory(role)
+      if (category === "leadership") return 1
+      if (category === "managers") return 2
+      if (category === "creative") return 3
+      return 4
     }
 
     const priorityA = getRolePriority(a.role)
@@ -156,7 +218,6 @@ export default function TeamPage() {
         onToggleVisibility={() => handleToggleVisibility(user.id)}
         roleColor={getRoleColor(category)}
         roleIcon={getRoleIcon(category)}
-        displayTitle={getDisplayTitle(user.id, user.role)}
         actionButton={
           selectedView === "list" ? (
             <Button
@@ -205,7 +266,7 @@ export default function TeamPage() {
     )
   }
 
-  const { owners, management, creative } = organizeByHierarchy(filteredUsers)
+  const { leadership, managers, creative } = organizeByHierarchy(filteredUsers)
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -214,10 +275,21 @@ export default function TeamPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => refreshUsers()}
+            onClick={() => {
+              refreshUsers('manualRefresh')
+            }}
             size="sm"
           >
             Refresh
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.reload()
+            }}
+            size="sm"
+          >
+            Refresh Avatars
           </Button>
           <Button
             variant={selectedView === "list" ? "default" : "outline"}
@@ -240,14 +312,14 @@ export default function TeamPage() {
         <div className="space-y-6">
           {renderHierarchySection(
             "Leadership",
-            owners,
+            leadership,
             <Crown className="h-6 w-6 text-purple-600" />,
             "Company leadership and decision makers"
           )}
 
           {renderHierarchySection(
-            "Management",
-            management,
+            "Managers",
+            managers,
             <Building className="h-6 w-6 text-blue-600" />,
             "Department heads and team leaders"
           )}

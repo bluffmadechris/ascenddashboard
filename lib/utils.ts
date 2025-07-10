@@ -6,16 +6,31 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getInitials(name: string): string {
-  const names = name.split(" ")
-  let initials = ""
+  return name
+    .split(' ')
+    .map(word => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
+}
 
-  if (names.length > 0 && names[0]) {
-    initials += names[0][0]
+export function isValidAvatarUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string' || url.trim() === '') {
+    return false
   }
-
-  if (names.length > 1 && names[names.length - 1]) {
-    initials += names[names.length - 1][0]
+  
+  try {
+    new URL(url)
+    return true
+  } catch {
+    return false
   }
+}
 
-  return initials.toUpperCase()
+export function normalizeAvatarUrl(url: string | null | undefined): string {
+  if (!url || typeof url !== 'string' || url.trim() === '') {
+    return ''
+  }
+  
+  return url.trim()
 }

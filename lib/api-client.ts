@@ -296,59 +296,71 @@ class ApiClient {
     id: number,
     updates: Partial<User>
   ): Promise<ApiResponse<{ user: User }>> {
-    // Map frontend fields to API fields
-    const apiUpdates = { ...updates };
-    if ('avatar' in apiUpdates) {
-      apiUpdates.avatar_url = apiUpdates.avatar as string;
-      delete apiUpdates.avatar;
-    }
-    if ('socialMedia' in apiUpdates) {
-      // Clean up social media data before sending
-      const socialMedia = apiUpdates.socialMedia;
-      if (socialMedia && typeof socialMedia === 'object') {
-        const cleanSocialMedia = {};
-        
-        // Handle the correct format - socialMedia should be an object with platform keys
-        Object.entries(socialMedia).forEach(([key, value]) => {
-          if (value && typeof value === 'string' && value.trim()) {
-            cleanSocialMedia[key] = value.trim();
-          } else if (key === 'customLinks' && Array.isArray(value)) {
-            const validLinks = value.filter(link => link.title && link.url);
-            if (validLinks.length > 0) {
-              cleanSocialMedia.customLinks = validLinks;
+    try {
+      // Map frontend fields to API fields
+      const apiUpdates = { ...updates };
+      if ('avatar' in apiUpdates) {
+        apiUpdates.avatar_url = apiUpdates.avatar as string;
+        delete apiUpdates.avatar;
+      }
+      if ('socialMedia' in apiUpdates) {
+        // Clean up social media data before sending
+        const socialMedia = apiUpdates.socialMedia;
+        if (socialMedia && typeof socialMedia === 'object') {
+          const cleanSocialMedia = {};
+          
+          // Handle the correct format - socialMedia should be an object with platform keys
+          Object.entries(socialMedia).forEach(([key, value]) => {
+            if (value && typeof value === 'string' && value.trim()) {
+              cleanSocialMedia[key] = value.trim();
+            } else if (key === 'customLinks' && Array.isArray(value)) {
+              const validLinks = value.filter(link => link.title && link.url);
+              if (validLinks.length > 0) {
+                cleanSocialMedia.customLinks = validLinks;
+              }
             }
-          }
-        });
+          });
 
-        // Only set social_links if we have valid links
-        if (Object.keys(cleanSocialMedia).length > 0) {
-          apiUpdates.social_links = cleanSocialMedia;
+          // Only set social_links if we have valid links
+          if (Object.keys(cleanSocialMedia).length > 0) {
+            apiUpdates.social_links = cleanSocialMedia;
+          } else {
+            apiUpdates.social_links = null;
+          }
         } else {
           apiUpdates.social_links = null;
         }
+        delete apiUpdates.socialMedia;
+      }
+
+      console.log('Sending API updates:', apiUpdates); // Debug log
+
+      const response = await this.put<{ user: User }>(`/users/${id}`, apiUpdates);
+      
+      // Map API response fields back to frontend fields
+      if (response.success && response.data?.user) {
+        const userData = response.data.user;
+        
+        // Ensure avatar field is properly mapped from avatar_url
+        if (userData.avatar_url !== undefined) {
+          userData.avatar = userData.avatar_url;
+        }
+        
+        // Map social_links back to socialMedia
+        if (userData.social_links) {
+          userData.socialMedia = userData.social_links;
+        }
+        
+        console.log('Mapped user data:', userData); // Debug log
       } else {
-        apiUpdates.social_links = null;
+        console.error('API response error:', response);
       }
-      delete apiUpdates.socialMedia;
+      
+      return response;
+    } catch (error) {
+      console.error('API updateUser error:', error);
+      throw error;
     }
-
-    console.log('Sending API updates:', apiUpdates); // Debug log
-
-    const response = await this.put<{ user: User }>(`/users/${id}`, apiUpdates);
-
-    // Map API response fields back to frontend fields
-    if (response.success && response.data?.user) {
-      if ('avatar_url' in response.data.user) {
-        response.data.user.avatar = response.data.user.avatar_url;
-        delete response.data.user.avatar_url;
-      }
-      if ('social_links' in response.data.user) {
-        response.data.user.socialMedia = response.data.user.social_links;
-        delete response.data.user.social_links;
-      }
-    }
-
-    return response;
   }
   
   async deleteUser(id: number): Promise<ApiResponse> {

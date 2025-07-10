@@ -832,9 +832,9 @@ export default function CalendarPage() {
         </Tabs>
       </div>
 
-      <div className="flex flex-1 gap-4 overflow-hidden">
+      <div className="flex flex-1 gap-4 h-full">
         {/* Calendar sidebar with enhanced functionality */}
-        <div ref={sidebarRef} className="hidden lg:block w-64 overflow-auto">
+        <div ref={sidebarRef} className="hidden lg:block w-64 h-full overflow-y-auto overflow-x-hidden">
           <CalendarSidebar
             selectedDate={selectedDate}
             onDateSelect={setSelectedDate}
@@ -848,9 +848,9 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar main content */}
-        <div className="flex-1 overflow-hidden">
-          <Card className="h-full overflow-hidden">
-            <CardContent className="p-0 h-full">
+        <div className="flex-1 h-full overflow-hidden">
+          <Card className="h-full">
+            <CardContent className="p-0 h-full overflow-hidden">
               {isLoadingEvents ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">

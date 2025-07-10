@@ -28,7 +28,6 @@ interface EditClientDialogProps {
     name: string
     industry: string
     status: string
-    totalSpent: string
   }
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -43,7 +42,6 @@ export function EditClientDialog({
 }: EditClientDialogProps) {
   const [formData, setFormData] = useState({
     status: client.status,
-    totalSpent: client.totalSpent.replace(/[^0-9.]/g, ""),
   })
 
   const handleSave = () => {
@@ -56,9 +54,6 @@ export function EditClientDialog({
         clients[client.id] = {
           ...clients[client.id],
           status: formData.status,
-          totalSpent: formData.totalSpent.startsWith("$")
-            ? formData.totalSpent
-            : `$${parseFloat(formData.totalSpent).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
         }
 
         // Save updated clients
@@ -80,7 +75,7 @@ export function EditClientDialog({
         <DialogHeader>
           <DialogTitle>Edit Client</DialogTitle>
           <DialogDescription>
-            Update client status and revenue information.
+            Update client status information.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -101,22 +96,6 @@ export function EditClientDialog({
                 <SelectItem value="Paused">Paused</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Total Revenue</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2">$</span>
-              <Input
-                type="number"
-                value={formData.totalSpent}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, totalSpent: e.target.value }))
-                }
-                className="pl-7"
-                step="0.01"
-                min="0"
-              />
-            </div>
           </div>
         </div>
         <DialogFooter>

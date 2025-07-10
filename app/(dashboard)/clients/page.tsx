@@ -6,7 +6,7 @@ import { ClientsList } from "@/components/dashboard/clients-list"
 import { useAuth } from "@/lib/auth-context"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { PlusCircle } from "lucide-react"
+import { PlusCircle, BarChart } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -28,8 +28,6 @@ interface Client {
   logo: string
   industry: string
   status: string
-  projects: number
-  totalSpent: string
   contactPerson: string
   contactEmail: string
 }
@@ -79,8 +77,6 @@ export default function ClientsPage() {
       logo: formData.logo || `/placeholder.svg?key=${formData.name.toLowerCase()}`,
       industry: formData.industry,
       status: "Active",
-      projects: 0,
-      totalSpent: "$0.00",
       contactPerson: "",
       contactEmail: "",
     }
@@ -119,12 +115,24 @@ export default function ClientsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
           <p className="text-muted-foreground">Manage all your clients.</p>
         </div>
-        {user?.role === "owner" && (
-          <Button onClick={() => setOpen(true)}>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Client
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {user?.role === "owner" && (
+            <Button
+              variant="outline"
+              onClick={() => window.location.href = '/analytics?tab=management'}
+              className="flex items-center gap-2"
+            >
+              <BarChart className="mr-2 h-4 w-4" />
+              Manage Finances
+            </Button>
+          )}
+          {user?.role === "owner" && (
+            <Button onClick={() => setOpen(true)}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Client
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>

@@ -54,7 +54,7 @@ type AuthContextType = {
   updateUser: (userId: string, updates: Partial<User>) => Promise<boolean>
   deleteUser: (userId: string) => Promise<boolean>
   getAvailableClients: () => { id: string; name: string }[]
-  refreshUsers: () => void
+  refreshUsers: (caller?: string) => void
   isApiConnected: boolean
 }
 
@@ -74,6 +74,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        // Clear any existing default users from localStorage
+        const existingUsers = loadData("users", [])
+        const hasDefaultUsers = existingUsers.some((user: any) =>
+          user.email?.includes("@ascendmedia.com") ||
+          user.name === "Admin User" ||
+          user.name === "John Smith" ||
+          user.name === "Sarah Johnson" ||
+          user.name === "Mike Chen" ||
+          user.name === "Emily Rodriguez" ||
+          user.name === "Alex Thompson"
+        )
+
+        if (hasDefaultUsers) {
+          console.log("🧹 Clearing default users from localStorage")
+          localStorage.removeItem("users")
+          localStorage.removeItem("user")
+        }
+
         // Check if API is available
         const healthCheck = await apiClient.healthCheck()
         setIsApiConnected(healthCheck.success)
@@ -85,7 +103,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (healthCheck.success) {
               const userResponse = await apiClient.getCurrentUser()
               if (userResponse.success && userResponse.data?.user) {
-                setUser(userResponse.data.user)
+                const userData = userResponse.data.user
+                const userWithMappedFields = {
+                  ...userData,
+                  avatar: userData.avatar_url || userData.avatar || "", // Ensure avatar field is properly mapped
+                  clientAccess: [] // Default to empty array since API doesn't provide this
+                } as unknown as User
+                setUser(userWithMappedFields)
+                saveData('user', userWithMappedFields)
               } else {
                 // Token is invalid or user not found, remove token and fall back to localStorage
                 TokenManager.removeToken()
@@ -126,13 +151,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth()
   }, [])
 
-  // Load users when API is connected, or initialize default users
+  // Load users when API is connected
   useEffect(() => {
     if (isApiConnected && user) {
-      refreshUsers()
-    } else if (!isApiConnected) {
-      // Initialize default users for localStorage mode
-      initializeDefaultUsers()
+      console.log('🔄 refreshUsers called from useEffect 1 (isApiConnected && user)')
+      refreshUsers('useEffect1')
     }
   }, [isApiConnected, user])
 
@@ -140,7 +163,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleFocus = () => {
       if (isApiConnected && user) {
-        refreshUsers()
+        console.log('🔄 refreshUsers called from window focus')
+        refreshUsers('windowFocus')
       }
     }
 
@@ -148,160 +172,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('focus', handleFocus)
   }, [isApiConnected, user])
 
-  // Ensure users are refreshed before rendering meeting forms
-  useEffect(() => {
-    if (isApiConnected) {
-      refreshUsers()
-    }
-  }, [])
-
-  // Initialize default users if none exist
-  const initializeDefaultUsers = () => {
-    const existingUsers = loadData("users", [])
-
-    if (existingUsers.length === 0) {
-      const defaultUsers = [
-        {
-          id: "1",
-          name: "Admin User",
-          email: "admin@ascendmedia.com",
-          role: "admin",
-          password: "admin123",
-          avatar: "",
-          bio: "System administrator with full access to all features and settings.",
-          socialMedia: {
-            facebook: "",
-            twitter: "",
-            linkedin: "",
-            instagram: "",
-            youtube: "",
-            customLinks: [],
-          },
-          clientAccess: [],
-        },
-        {
-          id: "2",
-          name: "John Smith",
-          email: "john@ascendmedia.com",
-          role: "owner",
-          password: "password123",
-          avatar: "",
-          bio: "CEO and Founder of Ascend Media. Leading the company vision and strategic direction.",
-          socialMedia: {
-            facebook: "",
-            twitter: "",
-            linkedin: "https://linkedin.com/in/johnsmith",
-            instagram: "",
-            youtube: "",
-            customLinks: [],
-          },
-          clientAccess: [],
-        },
-        {
-          id: "3",
-          name: "Sarah Johnson",
-          email: "sarah@ascendmedia.com",
-          role: "manager",
-          password: "password123",
-          avatar: "",
-          bio: "Creative Director overseeing all design and content strategy initiatives.",
-          socialMedia: {
-            facebook: "",
-            twitter: "https://twitter.com/sarahj_creative",
-            linkedin: "",
-            instagram: "https://instagram.com/sarahj_creative",
-            youtube: "",
-            customLinks: [],
-          },
-          clientAccess: [],
-        },
-        {
-          id: "4",
-          name: "Mike Chen",
-          email: "mike@ascendmedia.com",
-          role: "designer",
-          password: "password123",
-          avatar: "",
-          bio: "Senior graphic designer specializing in brand identity and digital marketing materials.",
-          socialMedia: {
-            facebook: "",
-            twitter: "",
-            linkedin: "",
-            instagram: "https://instagram.com/mikechen_design",
-            youtube: "",
-            customLinks: [
-              { title: "Portfolio", url: "https://mikechen.design" }
-            ],
-          },
-          clientAccess: [],
-        },
-        {
-          id: "5",
-          name: "Emily Rodriguez",
-          email: "emily@ascendmedia.com",
-          role: "editor",
-          password: "password123",
-          avatar: "",
-          bio: "Video editor and content creator with expertise in YouTube and social media content.",
-          socialMedia: {
-            facebook: "",
-            twitter: "",
-            linkedin: "",
-            instagram: "",
-            youtube: "https://youtube.com/c/emilyedits",
-            customLinks: [],
-          },
-          clientAccess: [],
-        },
-        {
-          id: "6",
-          name: "Alex Thompson",
-          email: "alex@ascendmedia.com",
-          role: "youtube_manager",
-          password: "password123",
-          avatar: "",
-          bio: "YouTube channel manager focusing on growth strategies and audience engagement.",
-          socialMedia: {
-            facebook: "",
-            twitter: "https://twitter.com/alexyt_manager",
-            linkedin: "https://linkedin.com/in/alexthompson-yt",
-            instagram: "",
-            youtube: "",
-            customLinks: [],
-          },
-          clientAccess: [],
-        }
-      ]
-
-      setUsers(defaultUsers as unknown as User[])
-      saveData("users", defaultUsers)
-      console.log("✅ Default users initialized")
-    } else {
-      setUsers(existingUsers)
-    }
-  }
-
   // Refresh users from API or localStorage
-  const refreshUsers = async () => {
+  const refreshUsers = async (caller = 'unknown') => {
+    console.log(`🔄 refreshUsers called by: ${caller}`)
     if (isApiConnected) {
       try {
         const response = await apiClient.getUsers()
         if (response.success && response.data?.users) {
-          // Ensure each user has a clientAccess array for frontend compatibility
+          // Ensure each user has a clientAccess array and proper avatar mapping for frontend compatibility
           const usersWithClientAccess = response.data.users.map(user => ({
             ...user,
+            avatar: user.avatar_url || user.avatar || "", // Ensure avatar field is properly mapped
             clientAccess: [] // Default to empty array since API doesn't provide this
           } as unknown as User))
-          setUsers(usersWithClientAccess)
+
+          console.log(`🔄 refreshUsers (${caller}) - API response users:`, usersWithClientAccess.map(u => ({ name: u.name, id: u.id, role: u.role })))
+          console.log(`🔄 refreshUsers (${caller}) - Current user:`, { name: user?.name, id: user?.id, role: user?.role })
+
+          // Always include the current user in the users list if they're not already there
+          let finalUsers = usersWithClientAccess
+          if (user) {
+            const currentUserInList = usersWithClientAccess.find(u => u.id === user.id || u.id.toString() === user.id.toString())
+            console.log(`🔄 refreshUsers (${caller}) - Current user already in list:`, currentUserInList ? 'YES' : 'NO')
+
+            if (!currentUserInList) {
+              console.log(`🔄 refreshUsers (${caller}) - Adding current user to list`)
+              finalUsers = [...usersWithClientAccess, user]
+            }
+          }
+
+          console.log(`🔄 refreshUsers (${caller}) - Final users:`, finalUsers.map(u => ({ name: u.name, id: u.id, role: u.role })))
+
+          setUsers(finalUsers)
+          saveData('users', finalUsers)
         }
       } catch (error) {
         console.error('Failed to fetch users from API:', error)
+        // If API fails but we have a current user, at least show them
+        if (user) {
+          setUsers([user])
+          saveData('users', [user])
+        }
       }
     } else {
-      // Fall back to localStorage
-      const refreshedUsers = loadData("users", [])
-      if (refreshedUsers && Array.isArray(refreshedUsers)) {
-        setUsers(refreshedUsers)
+      // When API is not connected, include current user if available
+      if (user) {
+        setUsers([user])
+        saveData('users', [user])
+      } else {
+        setUsers([])
       }
     }
   }
@@ -313,12 +232,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await apiClient.login(email, password)
         console.log("🔄 response", response)
         if (response.success && response.data?.user) {
-          // Ensure user has clientAccess property for frontend compatibility
+          // Ensure user has clientAccess property and proper avatar mapping for frontend compatibility
           const userWithClientAccess = {
             ...response.data.user,
+            avatar: response.data.user.avatar_url || response.data.user.avatar || "", // Ensure avatar field is properly mapped
             clientAccess: [] // Default to empty array since API doesn't provide this
           } as unknown as User
           setUser(userWithClientAccess)
+          saveData('user', userWithClientAccess)
+
+          // Refresh users to include the current user in the team list
+          console.log('🔄 Login success - calling refreshUsers in 100ms')
+          setTimeout(() => {
+            console.log('🔄 Login setTimeout - refreshUsers called')
+            refreshUsers('loginTimeout')
+          }, 100)
+
           return true
         }
         return false
@@ -327,7 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false
       }
     } else {
-      // Fall back to localStorage authentication
+      // Fall back to localStorage
       console.log("🔄 Fall back to localStorage authentication")
       console.log("🔄 users", users)
       console.log("🔄 email", email)
@@ -340,6 +269,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { password: _, ...userWithoutPassword } = matchedUser
         setUser(userWithoutPassword)
         saveData("user", userWithoutPassword)
+
+        // Refresh users to ensure current user is included
+        setTimeout(() => {
+          console.log('🔄 localStorage login setTimeout - refreshUsers called')
+          refreshUsers('localStorageLoginTimeout')
+        }, 100)
+
         return true
       }
       return false
@@ -480,14 +416,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isApiConnected) {
         const response = await apiClient.updateUser(numericUserId, updates)
         if (response.success && response.data?.user) {
+          const updatedUserData = response.data.user
+
+          // Ensure avatar field is properly mapped from avatar_url
+          if (updatedUserData.avatar_url !== undefined) {
+            updatedUserData.avatar = updatedUserData.avatar_url
+          }
+
           // Update local user state if the current user is being updated
           if (user && user.id === numericUserId) {
-            setUser({ ...user, ...response.data.user })
+            const updatedUser = { ...user, ...updatedUserData }
+            setUser(updatedUser)
+            saveData('user', updatedUser)
           }
+
           // Update users list
           setUsers(prevUsers =>
-            prevUsers.map(u => (u.id === numericUserId ? { ...u, ...response.data?.user } : u))
+            prevUsers.map(u => {
+              if (u.id === numericUserId) {
+                const updatedUser = { ...u, ...updatedUserData }
+                // Ensure avatar field is properly mapped
+                if (updatedUser.avatar_url !== undefined) {
+                  updatedUser.avatar = updatedUser.avatar_url
+                }
+                return updatedUser
+              }
+              return u
+            })
           )
+
+          // Update users in localStorage
+          const updatedUsers = users.map(u => {
+            if (u.id === numericUserId) {
+              const updatedUser = { ...u, ...updatedUserData }
+              if (updatedUser.avatar_url !== undefined) {
+                updatedUser.avatar = updatedUser.avatar_url
+              }
+              return updatedUser
+            }
+            return u
+          })
+          saveData('users', updatedUsers)
+
           return true
         }
         return false
@@ -526,7 +496,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
 
         if (response.success && response.data?.user) {
-          await refreshUsers()
+          await refreshUsers('createUser')
           return response.data.user
         }
         throw new Error(response.message || 'Failed to create user')
@@ -556,8 +526,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (isApiConnected) {
       try {
         const response = await apiClient.updateUser(parseInt(userId), updates)
-        if (response.success) {
-          await refreshUsers()
+        if (response.success && response.data?.user) {
+          const updatedUserData = response.data.user
+
+          // Ensure avatar field is properly mapped from avatar_url
+          if (updatedUserData.avatar_url !== undefined) {
+            updatedUserData.avatar = updatedUserData.avatar_url
+          }
+
+          // Update local user state if the current user is being updated
+          if (user && user.id.toString() === userId) {
+            const updatedUser = { ...user, ...updatedUserData }
+            setUser(updatedUser)
+            saveData('user', updatedUser)
+          }
+
+          // Refresh users to ensure consistency
+          await refreshUsers('updateUser')
           return true
         }
         return false
@@ -615,7 +600,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const response = await apiClient.deleteUser(parseInt(userId))
         if (response.success) {
-          await refreshUsers()
+          await refreshUsers('deleteUser')
           return true
         }
         return false

@@ -152,9 +152,9 @@ export function CalendarSidebar({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-full flex flex-col space-y-4 overflow-y-auto overflow-x-hidden">
       {/* Mini Calendar */}
-      <Card className="bg-[#0f1729] text-white border-none">
+      <Card className="bg-[#0f1729] text-white border-none flex-shrink-0">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-medium">{format(currentMonth, "MMMM yyyy")}</CardTitle>
@@ -207,22 +207,24 @@ export function CalendarSidebar({
       </Card>
 
       {/* Create Event Button */}
-      <Button className="w-full bg-[#3b82f6] hover:bg-[#2563eb]" onClick={onCreateEvent}>
+      <Button className="w-full bg-[#3b82f6] hover:bg-[#2563eb] flex-shrink-0" onClick={onCreateEvent}>
         <Plus className="h-4 w-4 mr-2" />
         Create Event
       </Button>
 
       {/* Employee Calendar Selector - Only for owners/managers */}
       {onEmployeeToggle && (
-        <EmployeeCalendarSelector
-          selectedEmployees={selectedEmployees}
-          onEmployeeToggle={onEmployeeToggle}
-          events={events}
-        />
+        <div className="flex-shrink-0">
+          <EmployeeCalendarSelector
+            selectedEmployees={selectedEmployees}
+            onEmployeeToggle={onEmployeeToggle}
+            events={events}
+          />
+        </div>
       )}
 
       {/* Calendar Filters */}
-      <Card className="bg-[#0f1729] text-white border-none">
+      <Card className="bg-[#0f1729] text-white border-none flex-shrink-0">
         <CardHeader>
           <CardTitle className="text-base font-medium">My Calendars</CardTitle>
         </CardHeader>
@@ -270,7 +272,7 @@ export function CalendarSidebar({
 
       {/* Selected Date Events */}
       {selectedDateEvents.length > 0 && (
-        <Card className="bg-[#0f1729] text-white border-none">
+        <Card className="bg-[#0f1729] text-white border-none flex-shrink-0">
           <CardHeader>
             <CardTitle className="text-base font-medium flex items-center">
               <Calendar className="h-4 w-4 mr-2" />
@@ -278,7 +280,7 @@ export function CalendarSidebar({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="max-h-48">
+            <div className="max-h-48 overflow-y-auto">
               <div className="space-y-2">
                 {selectedDateEvents.map((event) => (
                   <div
@@ -310,13 +312,13 @@ export function CalendarSidebar({
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       )}
 
       {/* Upcoming Events */}
-      <Card className="bg-[#0f1729] text-white border-none">
+      <Card className="bg-[#0f1729] text-white border-none flex-1 min-h-0">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-medium" ref={upcomingEventsRef} id="upcoming-events">
@@ -334,7 +336,7 @@ export function CalendarSidebar({
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex-1 overflow-y-auto">
           {upcomingEvents.length > 0 ? (
             <div className="space-y-2">
               {upcomingEvents.map((event) => (
@@ -373,7 +375,7 @@ export function CalendarSidebar({
           <DialogHeader>
             <DialogTitle>All Upcoming Events ({allUpcomingEvents.length})</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-96">
+          <div className="max-h-96 overflow-y-auto">
             <div className="space-y-2">
               {allUpcomingEvents.map((event) => (
                 <div
@@ -414,7 +416,7 @@ export function CalendarSidebar({
                 </div>
               ))}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
