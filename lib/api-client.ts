@@ -222,7 +222,7 @@ class ApiClient {
         delete response.data.user.avatar_url;
       }
       if ('social_links' in response.data.user) {
-        response.data.user.socialMedia = response.data.user.social_links;
+        response.data.user.socialMedia = response.data.user.social_links || {};
         delete response.data.user.social_links;
       }
       // Ensure bio field is preserved (bio stays as bio)
@@ -256,7 +256,7 @@ class ApiClient {
           delete user.avatar_url;
         }
         if ('social_links' in user) {
-          user.socialMedia = user.social_links;
+          user.socialMedia = user.social_links || {};
           delete user.social_links;
         }
         // Ensure bio field is preserved (bio stays as bio)
@@ -280,7 +280,7 @@ class ApiClient {
         delete response.data.user.avatar_url;
       }
       if ('social_links' in response.data.user) {
-        response.data.user.socialMedia = response.data.user.social_links;
+        response.data.user.socialMedia = response.data.user.social_links || {};
         delete response.data.user.social_links;
       }
       // Ensure bio field is preserved (bio stays as bio)
@@ -359,8 +359,8 @@ class ApiClient {
         }
         
         // Map social_links back to socialMedia
-        if (userData.social_links) {
-          userData.socialMedia = userData.social_links;
+        if ('social_links' in userData) {
+          userData.socialMedia = userData.social_links || {};
         }
         
         // Ensure bio field is preserved (bio stays as bio)

@@ -421,6 +421,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             updatedUserData.avatar = updatedUserData.avatar_url
           }
 
+          // Ensure socialMedia field is properly mapped from social_links
+          if ('social_links' in updatedUserData) {
+            updatedUserData.socialMedia = updatedUserData.social_links || {}
+          }
+
           // Update local user state if the current user is being updated
           if (user && user.id === numericUserId) {
             const updatedUser = { ...user, ...updatedUserData }
@@ -437,6 +442,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 if (updatedUser.avatar_url !== undefined) {
                   updatedUser.avatar = updatedUser.avatar_url
                 }
+                // Ensure socialMedia field is properly mapped
+                if ('social_links' in updatedUser) {
+                  updatedUser.socialMedia = updatedUser.social_links || {}
+                }
                 return updatedUser
               }
               return u
@@ -449,6 +458,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               const updatedUser = { ...u, ...updatedUserData }
               if (updatedUser.avatar_url !== undefined) {
                 updatedUser.avatar = updatedUser.avatar_url
+              }
+              if ('social_links' in updatedUser) {
+                updatedUser.socialMedia = updatedUser.social_links || {}
               }
               return updatedUser
             }
@@ -530,6 +542,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Ensure avatar field is properly mapped from avatar_url
           if (updatedUserData.avatar_url !== undefined) {
             updatedUserData.avatar = updatedUserData.avatar_url
+          }
+
+          // Ensure socialMedia field is properly mapped from social_links
+          if ('social_links' in updatedUserData) {
+            updatedUserData.socialMedia = updatedUserData.social_links || {}
           }
 
           // Update local user state if the current user is being updated
