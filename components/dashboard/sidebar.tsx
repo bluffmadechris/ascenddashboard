@@ -4,17 +4,10 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import {
-  FolderKanban,
-  LayoutDashboard,
-  ListChecks,
-  Users,
-  FileSignature,
   Receipt,
-  Calendar,
   Shield,
   Pencil,
   ChevronRight,
-  Bell,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -86,38 +79,7 @@ export function DashboardSidebar() {
           {/* Navigation */}
           <div className="flex-1 space-y-2 overflow-auto px-4 py-6">
             <div className="space-y-2">
-              <NavItem href="/dashboard" icon={LayoutDashboard}>Dashboard</NavItem>
               <NavItem href="/invoices" icon={Receipt}>Invoices</NavItem>
-
-              {/* Clients section */}
-              {user?.role === "owner" || user?.role === "designer" || user?.role === "editor" ? (
-                <NavItem href="/clients" icon={FolderKanban}>Clients</NavItem>
-              ) : (
-                user?.clientAccess?.map(
-                  (access) =>
-                    access.canView && (
-                      <NavItem
-                        key={access.clientId}
-                        href={`/clients/${access.clientId}`}
-                        icon={FolderKanban}
-                      >
-                        {access.clientId === "capri"
-                          ? "Capri"
-                          : access.clientId === "piper-rockelle"
-                            ? "Piper Rockelle"
-                            : access.clientId === "paryeet"
-                              ? "Paryeet"
-                              : access.clientId === "lacy-vods"
-                                ? "Lacy VODS"
-                                : "Client"}
-                      </NavItem>
-                    )
-                )
-              )}
-
-              <NavItem href="/calendar" icon={Calendar}>Calendar</NavItem>
-              <NavItem href="/meeting-requests" icon={Bell}>Meeting Requests</NavItem>
-              <NavItem href="/team" icon={Users}>Teams</NavItem>
               {(user?.role === "owner" || user?.role === "admin") && (
                 <NavItem href="/owner-panel" icon={Shield}>Owner Panel</NavItem>
               )}
